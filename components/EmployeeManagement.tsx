@@ -272,7 +272,7 @@ export default function EmployeeManagement() {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {employees.map((emp) => (
+                                {employees?.map((emp) => (
                                     <TableRow key={emp._id} hover sx={{ '&:hover': { bgcolor: 'grey.50' } }}>
                                         <TableCell>
                                             <Box display="flex" alignItems="center">
@@ -374,7 +374,7 @@ export default function EmployeeManagement() {
                                     onChange={(e) => setForm({ ...form, branchId: e.target.value })}
                                     label="Branch"
                                 >
-                                    {branches.map((b) => (
+                                    {branches?.map((b) => (
                                         <MenuItem key={b._id} value={b._id}>
                                             <Box display="flex" alignItems="center">
                                                 <Business sx={{ mr: 1, fontSize: 18 }} />

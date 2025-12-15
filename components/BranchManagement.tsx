@@ -54,7 +54,7 @@ export default function BranchManagement() {
             <Typography variant="h6">Manage Branches</Typography>
             <Button variant="contained" onClick={() => { setEditing(null); setName(""); setOpen(true); }} sx={{ mb: 2 }}>Add Branch</Button>
             <List>
-                {branches.map((branch) => (
+                {branches?.map((branch) => (
                     <ListItem key={branch._id} secondaryAction={
                         <>
                             <IconButton onClick={() => handleEdit(branch)}><Edit /></IconButton>
