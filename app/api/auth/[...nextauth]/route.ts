@@ -1,16 +1,5 @@
 import NextAuth, { type AuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
-import { connectDB } from "@/lib/mongodb";
-import { Admin } from "@/models/admin";
-
-async function seedAdminIfNeeded() {
-    const existing = await Admin.findOne();
-    if (!existing) {
-        const hashed = await bcrypt.hash("admin123", 10);
-        await Admin.create({ email: "admin@example.com", password: hashed });
-    }
-}
 
 export const authOptions: AuthOptions = {
     providers: [
@@ -21,13 +10,11 @@ export const authOptions: AuthOptions = {
                 password: { label: "Password", type: "password" },
             },
             async authorize(credentials) {
-                await connectDB();
-                await seedAdminIfNeeded();
-                const admin = await Admin.findOne({ email: credentials?.email });
-                if (!admin) return null;
-                const valid = await bcrypt.compare(credentials!.password, admin.password);
-                if (!valid) return null;
-                return { id: admin._id, email: admin.email };
+                // Simple hardcoded admin check for demo
+                if (credentials?.email === "admin@securevision.com" && credentials?.password === "admin123") {
+                    return { id: "admin", email: "admin@securevision.com" };
+                }
+                return null;
             },
         }),
     ],
