@@ -19,10 +19,17 @@ export default function BranchManagement() {
     }, []);
 
     const fetchBranches = async () => {
-        const res = await fetch("/api/branches");
-        const data = await res.json();
-        setBranches(data);
+        try {
+            const res = await fetch("/api/branches");
+            if (!res.ok) throw new Error("Failed to fetch branches");
+            const data = await res.json();
+            setBranches(Array.isArray(data) ? data : []);
+        } catch (error) {
+            console.error(error);
+            setBranches([]);
+        }
     };
+
 
     const handleSubmit = async () => {
         const method = editing ? "PUT" : "POST";
@@ -56,10 +63,10 @@ export default function BranchManagement() {
             <List>
                 {branches?.map((branch) => (
                     <ListItem key={branch._id} secondaryAction={
-                        <>
+                        <Box>
                             <IconButton onClick={() => handleEdit(branch)}><Edit /></IconButton>
                             <IconButton onClick={() => handleDelete(branch._id)}><Delete /></IconButton>
-                        </>
+                        </Box>
                     }>
                         <ListItemText primary={branch.name} />
                     </ListItem>

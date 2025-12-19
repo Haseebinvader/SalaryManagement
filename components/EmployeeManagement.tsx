@@ -12,7 +12,7 @@ interface Branch {
 interface Employee {
     _id: string;
     name: string;
-    branchId: Branch;
+    branchId: Branch | null;
     basicPay: number;
     productRebate: number;
     pointsRebate: number;
@@ -26,6 +26,10 @@ interface Employee {
 export default function EmployeeManagement() {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [branches, setBranches] = useState<Branch[]>([]);
+    const [searchName, setSearchName] = useState("");
+    const [searchId, setSearchId] = useState("");
+    const [branchName, setBranchName] = useState("");
+
     const [form, setForm] = useState({
         name: "",
         branchId: "",
@@ -44,21 +48,44 @@ export default function EmployeeManagement() {
     const [viewOpen, setViewOpen] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
 
+    const filteredEmployees = employees.filter((emp) => {
+        const matchName =
+            emp.name.toLowerCase().includes(searchName.toLowerCase());
+
+        const matchId =
+            emp.branchId?.name.toLowerCase().includes(branchName.toLowerCase());
+
+        return matchName && matchId;
+    });
+
     useEffect(() => {
         fetchEmployees();
         fetchBranches();
     }, []);
 
     const fetchEmployees = async () => {
-        const res = await fetch("/api/employees");
-        const data = await res.json();
-        setEmployees(data);
+        try {
+            const res = await fetch("/api/employees");
+            if (!res.ok) throw new Error("Failed to fetch employees");
+            const data = await res.json();
+            setEmployees(Array.isArray(data) ? data : []);
+        } catch (error) {
+            console.error(error);
+            setEmployees([]);
+        }
     };
 
+
     const fetchBranches = async () => {
-        const res = await fetch("/api/branches");
-        const data = await res.json();
-        setBranches(data);
+        try {
+            const res = await fetch("/api/branches");
+            if (!res.ok) throw new Error("Failed to fetch branches");
+            const data = await res.json();
+            setBranches(Array.isArray(data) ? data : []);
+        } catch (error) {
+            console.error(error);
+            setBranches([]);
+        }
     };
 
     const handleSubmit = async () => {
@@ -111,7 +138,7 @@ export default function EmployeeManagement() {
         setEditing(employee);
         setForm({
             name: employee.name,
-            branchId: employee.branchId._id,
+            branchId: employee.branchId?._id || '',
             basicPay: employee.basicPay.toString(),
             productRebate: employee.productRebate.toString(),
             pointsRebate: employee.pointsRebate.toString(),
@@ -140,7 +167,9 @@ export default function EmployeeManagement() {
 
     const handlePrint = (employee: Employee | null) => {
         if (!employee) return;
-        const printWindow = window.open('', '_blank');
+        if (typeof window === "undefined") return;
+
+        const printWindow = window.open("", "_blank");
         if (printWindow) {
             printWindow.document.write(`
                 <html>
@@ -159,7 +188,7 @@ export default function EmployeeManagement() {
                     <h1>Employee Details</h1>
                     <div class="section">
                         <div class="field"><span class="label">Name:</span> ${employee.name}</div>
-                        <div class="field"><span class="label">Branch:</span> ${employee.branchId.name}</div>
+                        <div class="field"><span class="label">Branch:</span> ${employee.branchId?.name || ''}</div>
                     </div>
                     <div class="section">
                         <h2>Earnings</h2>
@@ -194,14 +223,16 @@ export default function EmployeeManagement() {
         }
     };
 
-    const handleDownloadPDF = (employee: Employee | null) => {
+
+
+    const handleDownloadPDF =async (employee: Employee | null) => {
         if (!employee) return;
-        const doc = new jsPDF();
+        const { default: jsPDF } = await import("jspdf"); const doc = new jsPDF();
         doc.setFontSize(20);
         doc.text('Employee Details', 20, 20);
         doc.setFontSize(12);
         doc.text(`Name: ${employee.name}`, 20, 40);
-        doc.text(`Branch: ${employee.branchId.name}`, 20, 50);
+        doc.text(`Branch: ${employee.branchId?.name}`, 20, 50);
         doc.text('Earnings:', 20, 70);
         doc.text(`Basic Pay: ${employee.basicPay}`, 30, 80);
         doc.text(`Product Rebate: ${employee.productRebate}`, 30, 90);
@@ -244,6 +275,43 @@ export default function EmployeeManagement() {
                                 Employee Management
                             </Typography>
                         </Box>
+                        <Box
+                            display="flex"
+                            gap={2}
+                            mb={3}
+                            flexWrap="wrap"
+                            alignItems="center"
+                        >
+                            <TextField
+                                size="small"
+                                label="Search by Name"
+                                value={searchName}
+                                onChange={(e) => setSearchName(e.target.value)}
+                                sx={{ minWidth: 220 }}
+                            />
+
+                            <TextField
+                                size="small"
+                                label="Search by Branch Name"
+                                value={branchName}
+                                onChange={(e) => setBranchName(e.target.value)}
+                                sx={{ minWidth: 220 }}
+                            />
+
+                            {(searchName || branchName) && (
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    onClick={() => {
+                                        setSearchName("");
+                                        setBranchName("");
+                                    }}
+                                >
+                                    Clear Filters
+                                </Button>
+                            )}
+                        </Box>
+
                         <Button
                             variant="contained"
                             startIcon={<Add />}
@@ -272,7 +340,16 @@ export default function EmployeeManagement() {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {employees?.map((emp) => (
+                                {filteredEmployees.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={12} align="center">
+                                            <Typography color="text.secondary">
+                                                No employees found
+                                            </Typography>
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                                {filteredEmployees?.map((emp) => (
                                     <TableRow key={emp._id} hover sx={{ '&:hover': { bgcolor: 'grey.50' } }}>
                                         <TableCell>
                                             <Box display="flex" alignItems="center">
@@ -285,7 +362,7 @@ export default function EmployeeManagement() {
                                         <TableCell>
                                             <Chip
                                                 icon={<Business />}
-                                                label={emp.branchId.name}
+                                                label={emp.branchId?.name || ''}
                                                 size="small"
                                                 variant="outlined"
                                                 color="primary"
@@ -386,130 +463,130 @@ export default function EmployeeManagement() {
                             </FormControl>
                         </Box>
 
-                    <Typography variant="h6" sx={{ mt: 3, mb: 2, color: 'primary.main' }}>
-                        <AttachMoney sx={{ mr: 1, verticalAlign: 'middle' }} />
-                        Earnings
-                    </Typography>
-                    <Box display="flex" flexWrap="wrap" gap={2}>
-                        <TextField
-                            label="Basic Pay"
-                            type="number"
-                            value={form.basicPay}
-                            onChange={(e) => setForm({ ...form, basicPay: e.target.value })}
-                            sx={{ flex: '1 1 200px' }}
-                            size="small"
-                            variant="outlined"
-                        />
-                        <TextField
-                            label="Product Rebate"
-                            type="number"
-                            value={form.productRebate}
-                            onChange={(e) => setForm({ ...form, productRebate: e.target.value })}
-                            sx={{ flex: '1 1 200px' }}
-                            size="small"
-                            variant="outlined"
-                        />
-                        <TextField
-                            label="Points Rebate"
-                            type="number"
-                            value={form.pointsRebate}
-                            onChange={(e) => setForm({ ...form, pointsRebate: e.target.value })}
-                            sx={{ flex: '1 1 200px' }}
-                            size="small"
-                            variant="outlined"
-                        />
-                        <TextField
-                            label="Performance Rebate"
-                            type="number"
-                            value={form.performanceRebate}
-                            onChange={(e) => setForm({ ...form, performanceRebate: e.target.value })}
-                            sx={{ flex: '1 1 200px' }}
-                            size="small"
-                            variant="outlined"
-                        />
-                    </Box>
-
-                    <Typography variant="h6" sx={{ mt: 3, mb: 2, color: 'error.main' }}>
-                        Deductions
-                    </Typography>
-                    <Box display="flex" flexWrap="wrap" gap={2}>
-                        <TextField
-                            label="House Rent Deduction"
-                            type="number"
-                            value={form.houseRentDeduction}
-                            onChange={(e) => setForm({ ...form, houseRentDeduction: e.target.value })}
-                            sx={{ flex: '1 1 200px' }}
-                            size="small"
-                            variant="outlined"
-                        />
-                        <TextField
-                            label="Food Deduction"
-                            type="number"
-                            value={form.foodDeduction}
-                            onChange={(e) => setForm({ ...form, foodDeduction: e.target.value })}
-                            sx={{ flex: '1 1 200px' }}
-                            size="small"
-                            variant="outlined"
-                        />
-                        <TextField
-                            label="Loan Deduction"
-                            type="number"
-                            value={form.loanDeduction}
-                            onChange={(e) => setForm({ ...form, loanDeduction: e.target.value })}
-                            sx={{ flex: '1 1 200px' }}
-                            size="small"
-                            variant="outlined"
-                        />
-                    </Box>
-
-                    <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
-                        <Typography variant="body1" fontWeight="medium">
-                            <strong>Gross Pay:</strong> {(
-                                (parseFloat(form.basicPay) || 0) +
-                                (parseFloat(form.productRebate) || 0) +
-                                (parseFloat(form.pointsRebate) || 0) +
-                                (parseFloat(form.performanceRebate) || 0)
-                            )}
+                        <Typography variant="h6" sx={{ mt: 3, mb: 2, color: 'primary.main' }}>
+                            <AttachMoney sx={{ mr: 1, verticalAlign: 'middle' }} />
+                            Earnings
                         </Typography>
-                        <Typography variant="body1" fontWeight="medium">
-                            <strong>Net Pay:</strong> {(
-                                (parseFloat(form.basicPay) || 0) +
-                                (parseFloat(form.productRebate) || 0) +
-                                (parseFloat(form.pointsRebate) || 0) +
-                                (parseFloat(form.performanceRebate) || 0) -
-                                (parseFloat(form.houseRentDeduction) || 0) -
-                                (parseFloat(form.foodDeduction) || 0) -
-                                (parseFloat(form.loanDeduction) || 0)
-                            )}
-                        </Typography>
-                    </Box>
+                        <Box display="flex" flexWrap="wrap" gap={2}>
+                            <TextField
+                                label="Basic Pay"
+                                type="number"
+                                value={form.basicPay}
+                                onChange={(e) => setForm({ ...form, basicPay: e.target.value })}
+                                sx={{ flex: '1 1 200px' }}
+                                size="small"
+                                variant="outlined"
+                            />
+                            <TextField
+                                label="Product Rebate"
+                                type="number"
+                                value={form.productRebate}
+                                onChange={(e) => setForm({ ...form, productRebate: e.target.value })}
+                                sx={{ flex: '1 1 200px' }}
+                                size="small"
+                                variant="outlined"
+                            />
+                            <TextField
+                                label="Points Rebate"
+                                type="number"
+                                value={form.pointsRebate}
+                                onChange={(e) => setForm({ ...form, pointsRebate: e.target.value })}
+                                sx={{ flex: '1 1 200px' }}
+                                size="small"
+                                variant="outlined"
+                            />
+                            <TextField
+                                label="Performance Rebate"
+                                type="number"
+                                value={form.performanceRebate}
+                                onChange={(e) => setForm({ ...form, performanceRebate: e.target.value })}
+                                sx={{ flex: '1 1 200px' }}
+                                size="small"
+                                variant="outlined"
+                            />
+                        </Box>
 
-                    <Box display="flex" flexWrap="wrap" gap={2} sx={{ mt: 1 }}>
-                        <TextField
-                            size="small"
-                            label="Loan Remaining"
-                            type="number"
-                            value={form.loanRemaining}
-                            onChange={(e) => setForm({ ...form, loanRemaining: e.target.value })}
-                            sx={{ flex: '1 1 200px' }}
-                            variant="outlined"
-                        />
-                        {editing && (() => {
-                            const newLoanRemaining = Math.max(0, (parseFloat(form.loanRemaining) || 0) - (parseFloat(form.repaymentAmount) || 0));
-                            return (
-                                <TextField
-                                    size="small"
-                                    label="Loan Repayment Amount"
-                                    type="number"
-                                    value={form.repaymentAmount}
-                                    onChange={(e) => setForm({ ...form, repaymentAmount: e.target.value })}
-                                    sx={{ flex: '1 1 200px' }}
-                                    variant="outlined"
-                                    helperText={`New: ${newLoanRemaining}`}
-                                />
-                            );
-                        })()}
-                    </Box>
+                        <Typography variant="h6" sx={{ mt: 3, mb: 2, color: 'error.main' }}>
+                            Deductions
+                        </Typography>
+                        <Box display="flex" flexWrap="wrap" gap={2}>
+                            <TextField
+                                label="House Rent Deduction"
+                                type="number"
+                                value={form.houseRentDeduction}
+                                onChange={(e) => setForm({ ...form, houseRentDeduction: e.target.value })}
+                                sx={{ flex: '1 1 200px' }}
+                                size="small"
+                                variant="outlined"
+                            />
+                            <TextField
+                                label="Food Deduction"
+                                type="number"
+                                value={form.foodDeduction}
+                                onChange={(e) => setForm({ ...form, foodDeduction: e.target.value })}
+                                sx={{ flex: '1 1 200px' }}
+                                size="small"
+                                variant="outlined"
+                            />
+                            <TextField
+                                label="Loan Deduction"
+                                type="number"
+                                value={form.loanDeduction}
+                                onChange={(e) => setForm({ ...form, loanDeduction: e.target.value })}
+                                sx={{ flex: '1 1 200px' }}
+                                size="small"
+                                variant="outlined"
+                            />
+                        </Box>
+
+                        <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
+                            <Typography variant="body1" fontWeight="medium">
+                                <strong>Gross Pay:</strong> {(
+                                    (parseFloat(form.basicPay) || 0) +
+                                    (parseFloat(form.productRebate) || 0) +
+                                    (parseFloat(form.pointsRebate) || 0) +
+                                    (parseFloat(form.performanceRebate) || 0)
+                                )}
+                            </Typography>
+                            <Typography variant="body1" fontWeight="medium">
+                                <strong>Net Pay:</strong> {(
+                                    (parseFloat(form.basicPay) || 0) +
+                                    (parseFloat(form.productRebate) || 0) +
+                                    (parseFloat(form.pointsRebate) || 0) +
+                                    (parseFloat(form.performanceRebate) || 0) -
+                                    (parseFloat(form.houseRentDeduction) || 0) -
+                                    (parseFloat(form.foodDeduction) || 0) -
+                                    (parseFloat(form.loanDeduction) || 0)
+                                )}
+                            </Typography>
+                        </Box>
+
+                        <Box display="flex" flexWrap="wrap" gap={2} sx={{ mt: 1 }}>
+                            <TextField
+                                size="small"
+                                label="Loan Remaining"
+                                type="number"
+                                value={form.loanRemaining}
+                                onChange={(e) => setForm({ ...form, loanRemaining: e.target.value })}
+                                sx={{ flex: '1 1 200px' }}
+                                variant="outlined"
+                            />
+                            {editing && (() => {
+                                const newLoanRemaining = Math.max(0, (parseFloat(form.loanRemaining) || 0) - (parseFloat(form.repaymentAmount) || 0));
+                                return (
+                                    <TextField
+                                        size="small"
+                                        label="Loan Repayment Amount"
+                                        type="number"
+                                        value={form.repaymentAmount}
+                                        onChange={(e) => setForm({ ...form, repaymentAmount: e.target.value })}
+                                        sx={{ flex: '1 1 200px' }}
+                                        variant="outlined"
+                                        helperText={`New: ${newLoanRemaining}`}
+                                    />
+                                );
+                            })()}
+                        </Box>
                     </Box>
                 </DialogContent>
                 <DialogActions sx={{ p: 3, pt: 0 }}>
@@ -550,7 +627,7 @@ export default function EmployeeManagement() {
                                     />
                                     <TextField
                                         label="Branch"
-                                        value={selectedEmployee.branchId.name}
+                                        value={selectedEmployee.branchId?.name || ''}
                                         fullWidth
                                         InputProps={{ readOnly: true }}
                                         variant="outlined"
@@ -654,11 +731,11 @@ export default function EmployeeManagement() {
                                         Terms and Conditions
                                     </Typography>
                                     <Typography variant="body2" sx={{ mt: 1 }}>
-                                        1. Salary payments are made on the last working day of each month.<br/>
-                                        2. All deductions are as per company policy and applicable laws.<br/>
-                                        3. Loan repayments will be deducted from salary until the loan is fully repaid.<br/>
-                                        4. Employees must maintain confidentiality of company information.<br/>
-                                        5. Any changes to salary components must be approved by management.<br/>
+                                        1. Salary payments are made on the last working day of each month.<br />
+                                        2. All deductions are as per company policy and applicable laws.<br />
+                                        3. Loan repayments will be deducted from salary until the loan is fully repaid.<br />
+                                        4. Employees must maintain confidentiality of company information.<br />
+                                        5. Any changes to salary components must be approved by management.<br />
                                         6. This document is generated electronically and is legally binding.
                                     </Typography>
                                 </Box>

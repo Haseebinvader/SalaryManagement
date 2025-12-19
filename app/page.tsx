@@ -1,24 +1,31 @@
 "use client";
+
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { CircularProgress, Box } from "@mui/material";
 
 export default function Home() {
-    const { data: session, status } = useSession();
+    const { status } = useSession();
     const router = useRouter();
 
     useEffect(() => {
-        if (status === "loading") return;
-        if (session) {
-            router.push("/dashboard");
-        } else {
-            router.push("/login");
+        if (status === "authenticated") {
+            router.replace("/dashboard");
         }
-    }, [session, status, router]);
+
+        if (status === "unauthenticated") {
+            router.replace("/login");
+        }
+    }, [status, router]);
 
     return (
-        <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+        <Box
+            display="flex"
+            justifyContent="center"
+            alignItems="center"
+            minHeight="100vh"
+        >
             <CircularProgress />
         </Box>
     );

@@ -6,6 +6,7 @@ import { Box, Typography, Button, CircularProgress, Tabs, Tab } from "@mui/mater
 import EmployeeManagement from "../../components/EmployeeManagement";
 import BranchManagement from "../../components/BranchManagement";
 import Terms from "../../components/Terms";
+import Image from "next/image";
 
 export default function Dashboard() {
     const { data: session, status } = useSession();
@@ -33,6 +34,7 @@ export default function Dashboard() {
     return (
         <Box sx={{ p: 4 }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                <Image src="/visionlogo.jpeg" alt="Logo" width={150} height={150} />
                 <Typography variant="h4">Salary Management Dashboard</Typography>
                 <Button onClick={() => signOut({ callbackUrl: "/login" })} variant="outlined">Logout</Button>
             </Box>
