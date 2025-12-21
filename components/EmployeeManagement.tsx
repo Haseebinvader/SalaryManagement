@@ -3,7 +3,8 @@ import { useState, useEffect } from "react";
 import { Box, Typography, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Select, MenuItem, FormControl, InputLabel, Card, CardContent, Chip, Avatar } from "@mui/material";
 import { Delete, Edit, Add, Person, Business, AttachMoney, AccountBalance, Visibility, PictureAsPdf, Print } from "@mui/icons-material";
 import jsPDF from 'jspdf';
-
+import 'jspdf-autotable'; // This enables autoTable
+const logoUrl = "/visionlogo.jpeg"; // served statically
 interface Branch {
     _id: string;
     name: string;
@@ -47,15 +48,32 @@ export default function EmployeeManagement() {
     const [open, setOpen] = useState(false);
     const [viewOpen, setViewOpen] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-
+    const [selectedMonth, setSelectedMonth] = useState("all");
+    const generateMonthOptions = () => {
+        const options = [
+            { value: "all", label: "All Months" }
+        ];
+        const now = new Date();
+        for (let i = 0; i < 12; i++) {
+            const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            const label = date.toLocaleString('en-US', { month: 'long' });
+            options.push({ value, label });
+        }
+        return options;
+    };
     const filteredEmployees = employees.filter((emp) => {
-        const matchName =
-            emp.name.toLowerCase().includes(searchName.toLowerCase());
+        const matchName = emp.name.toLowerCase().includes(searchName.toLowerCase());
+        const matchBranch = emp.branchId?.name.toLowerCase().includes(branchName.toLowerCase()) ?? true;
 
-        const matchId =
-            emp.branchId?.name.toLowerCase().includes(branchName.toLowerCase());
+        let matchMonth = true;
+        if (selectedMonth !== "all" && emp.createdAt) {
+            const empDate = new Date(emp.createdAt);
+            const empMonthYear = `${empDate.getFullYear()}-${String(empDate.getMonth() + 1).padStart(2, '0')}`;
+            matchMonth = empMonthYear === selectedMonth;
+        }
 
-        return matchName && matchId;
+        return matchName && matchBranch && matchMonth;
     });
 
     useEffect(() => {
@@ -74,6 +92,9 @@ export default function EmployeeManagement() {
             setEmployees([]);
         }
     };
+
+    console.log(employees);
+
 
 
     const fetchBranches = async () => {
@@ -166,47 +187,57 @@ export default function EmployeeManagement() {
     const calculateNet = (emp: Employee) => calculateGross(emp) - emp.houseRentDeduction - emp.foodDeduction - emp.loanDeduction;
 
     const handlePrint = (employee: Employee | null) => {
-        if (!employee) return;
-        if (typeof window === "undefined") return;
+        if (!employee || typeof window === "undefined") return;
 
         const printWindow = window.open("", "_blank");
-        if (printWindow) {
-            printWindow.document.write(`
-                <html>
-                <head>
-                    <title>Employee Details - ${employee.name}</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; }
-                        h1 { color: #1976d2; }
-                        .section { margin-bottom: 20px; }
-                        .field { margin-bottom: 10px; }
-                        .label { font-weight: bold; }
-                        .terms { background-color: #e3f2fd; padding: 10px; border-radius: 5px; }
-                    </style>
-                </head>
-                <body>
-                    <h1>Employee Details</h1>
-                    <div class="section">
-                        <div class="field"><span class="label">Name:</span> ${employee.name}</div>
-                        <div class="field"><span class="label">Branch:</span> ${employee.branchId?.name || ''}</div>
-                    </div>
-                    <div class="section">
-                        <h2>Earnings</h2>
-                        <div class="field"><span class="label">Basic Pay:</span> ${employee.basicPay}</div>
-                        <div class="field"><span class="label">Product Rebate:</span> ${employee.productRebate}</div>
-                        <div class="field"><span class="label">Points Rebate:</span> ${employee.pointsRebate}</div>
-                        <div class="field"><span class="label">Performance Rebate:</span> ${employee.performanceRebate}</div>
-                        <div class="field"><span class="label">Gross Pay:</span> ${calculateGross(employee)}</div>
-                    </div>
-                    <div class="section">
-                        <h2>Deductions</h2>
-                        <div class="field"><span class="label">House Rent:</span> ${employee.houseRentDeduction}</div>
-                        <div class="field"><span class="label">Food:</span> ${employee.foodDeduction}</div>
-                        <div class="field"><span class="label">Loan:</span> ${employee.loanDeduction}</div>
-                        <div class="field"><span class="label">Net Pay:</span> ${calculateNet(employee)}</div>
-                        <div class="field"><span class="label">Loan Remaining:</span> ${employee.loanRemaining}</div>
-                    </div>
-                    <div class="section terms">
+        if (!printWindow) return;
+
+        printWindow.document.write(`
+            <html>
+            <head>
+                <title>Salary Slip - ${employee.name}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 30px; color: #333; }
+                    .header { display: flex; align-items: center; border-bottom: 2px solid #1976d2; padding-bottom: 10px; }
+                    .logo { height: 80px; margin-right: 15px; }
+                    .company { font-size: 22px; font-weight: bold; color: #1976d2; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                    th, td { padding: 10px; border: 1px solid #ddd; }
+                    th { background: #f5f7fa; text-align: left; }
+                    .total { font-weight: bold; background: #e3f2fd; }
+                </style>
+            </head>
+            <body>
+    
+                <div class="header">
+                    <img src="${logoUrl}" class="logo" />
+                    <div class="company">Vision Management</div>
+                </div>
+    
+                <p><strong>Employee:</strong> ${employee.name}</p>
+                <p><strong>Branch:</strong> ${employee.branchId?.name || ""}</p>
+    
+                <h3>Earnings</h3>
+                <table>
+                    <tr><th>Basic Pay</th><td>${employee.basicPay}</td></tr>
+                    <tr><th>Product Rebate</th><td>${employee.productRebate}</td></tr>
+                    <tr><th>Points Rebate</th><td>${employee.pointsRebate}</td></tr>
+                    <tr><th>Performance Rebate</th><td>${employee.performanceRebate}</td></tr>
+                    <tr class="total"><th>Gross Pay</th><td>${calculateGross(employee)}</td></tr>
+                </table>
+    
+                <h3>Deductions</h3>
+                <table>
+                    <tr><th>House Rent</th><td>${employee.houseRentDeduction}</td></tr>
+                    <tr><th>Food</th><td>${employee.foodDeduction}</td></tr>
+                    <tr><th>Loan</th><td>${employee.loanDeduction}</td></tr>
+                    <tr class="total"><th>Net Pay</th><td>${calculateNet(employee)}</td></tr>
+                </table>
+    
+                <p style="margin-top:40px;font-size:12px;color:#777;">
+                    This is a system-generated salary slip.
+                </p>
+    <div class="section terms">
                         <h2>Terms and Conditions</h2>
                         <p>1. Salary payments are made on the last working day of each month.</p>
                         <p>2. All deductions are as per company policy and applicable laws.</p>
@@ -215,51 +246,145 @@ export default function EmployeeManagement() {
                         <p>5. Any changes to salary components must be approved by management.</p>
                         <p>6. This document is generated electronically and is legally binding.</p>
                     </div>
-                </body>
-                </html>
-            `);
-            printWindow.document.close();
-            printWindow.print();
-        }
+            </body>
+            </html>
+        `);
+
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
     };
 
 
 
-    const handleDownloadPDF =async (employee: Employee | null) => {
+    const handleDownloadPDF = async (employee: Employee | null) => {
         if (!employee) return;
-        const { default: jsPDF } = await import("jspdf"); const doc = new jsPDF();
-        doc.setFontSize(20);
-        doc.text('Employee Details', 20, 20);
-        doc.setFontSize(12);
-        doc.text(`Name: ${employee.name}`, 20, 40);
-        doc.text(`Branch: ${employee.branchId?.name}`, 20, 50);
-        doc.text('Earnings:', 20, 70);
-        doc.text(`Basic Pay: ${employee.basicPay}`, 30, 80);
-        doc.text(`Product Rebate: ${employee.productRebate}`, 30, 90);
-        doc.text(`Points Rebate: ${employee.pointsRebate}`, 30, 100);
-        doc.text(`Performance Rebate: ${employee.performanceRebate}`, 30, 110);
-        doc.text(`Gross Pay: ${calculateGross(employee)}`, 30, 120);
-        doc.text('Deductions:', 20, 140);
-        doc.text(`House Rent: ${employee.houseRentDeduction}`, 30, 150);
-        doc.text(`Food: ${employee.foodDeduction}`, 30, 160);
-        doc.text(`Loan: ${employee.loanDeduction}`, 30, 170);
-        doc.text(`Net Pay: ${calculateNet(employee)}`, 30, 180);
-        doc.text(`Loan Remaining: ${employee.loanRemaining}`, 30, 190);
-        doc.text('Terms and Conditions:', 20, 210);
-        const terms = [
-            '1. Salary payments are made on the last working day of each month.',
-            '2. All deductions are as per company policy and applicable laws.',
-            '3. Loan repayments will be deducted from salary until the loan is fully repaid.',
-            '4. Employees must maintain confidentiality of company information.',
-            '5. Any changes to salary components must be approved by management.',
-            '6. This document is generated electronically and is legally binding.'
-        ];
-        let y = 220;
-        terms.forEach(term => {
-            doc.text(term, 30, y);
+
+        const doc = new jsPDF("p", "mm", "a4");
+
+        try {
+            // Load logo safely
+            let logoData = null;
+            try {
+                const img = new Image();
+                img.src = logoUrl;
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = reject;
+                });
+                const canvas = document.createElement("canvas");
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext("2d");
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0);
+                    logoData = canvas.toDataURL("image/jpeg");
+                }
+            } catch (e) {
+                console.warn("Logo not found or failed to load – continuing without logo");
+            }
+
+            let y = 20; // Starting position
+
+            // Logo
+            if (logoData) {
+                doc.addImage(logoData, "JPEG", 15, y, 40, 30);
+                y += 40;
+            } else {
+                y += 10;
+            }
+
+            // Company Name
+            doc.setFontSize(22);
+            doc.setFont("helvetica", "bold");
+            doc.text("Vision Management", 70, y);
             y += 10;
-        });
-        doc.save(`${employee.name}_details.pdf`);
+
+            // Title
+            doc.setFontSize(18);
+            doc.text("Salary Slip", 70, y);
+            y += 15;
+
+            // Employee Details
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Employee Name: ${employee.name}`, 20, y);
+            y += 8;
+            doc.text(`Branch: ${employee.branchId?.name || "N/A"}`, 20, y);
+            y += 15;
+
+            // Earnings
+            doc.setFontSize(14);
+            doc.setFont("helvetica", "bold");
+            doc.text("Earnings", 20, y);
+            y += 10;
+
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Basic Pay:           ${employee.basicPay.toFixed(2)}`, 30, y);
+            y += 8;
+            doc.text(`Product Rebate:      ${employee.productRebate.toFixed(2)}`, 30, y);
+            y += 8;
+            doc.text(`Points Rebate:       ${employee.pointsRebate.toFixed(2)}`, 30, y);
+            y += 8;
+            doc.text(`Performance Rebate:  ${employee.performanceRebate.toFixed(2)}`, 30, y);
+            y += 10;
+            doc.text(`Gross Pay:           ${calculateGross(employee).toFixed(2)}`, 30, y);
+            y += 20;
+
+            // Deductions
+            doc.setFontSize(14);
+            doc.setFont("helvetica", "bold");
+            doc.text("Deductions", 20, y);
+            y += 10;
+
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "normal");
+            doc.text(`House Rent:          ${employee.houseRentDeduction.toFixed(2)}`, 30, y);
+            y += 8;
+            doc.text(`Food:                ${employee.foodDeduction.toFixed(2)}`, 30, y);
+            y += 8;
+            doc.text(`Loan Deduction:      ${employee.loanDeduction.toFixed(2)}`, 30, y);
+            y += 10;
+            doc.text(`Net Pay:             ${calculateNet(employee).toFixed(2)}`, 30, y);
+            y += 15;
+
+            // Loan Remaining
+            doc.text(`Loan Remaining:      ${employee.loanRemaining.toFixed(2)}`, 30, y);
+            y += 25;
+
+            // Terms and Conditions
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "bold");
+            doc.text("Terms and Conditions", 20, y);
+            y += 8;
+
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+            doc.text("• Salary is paid on the last working day of the month.", 25, y);
+            y += 6;
+            doc.text("• All deductions are as per company policy and law.", 25, y);
+            y += 6;
+            doc.text("• Loan repayments are deducted automatically until cleared.", 25, y);
+            y += 6;
+            doc.text("• This is a system-generated document. No signature required.", 25, y);
+            y += 6;
+            doc.text("• Employees must maintain confidentiality of salary details.", 25, y);
+            y += 15;
+
+            // Footer with date
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text("Generated on: 21 December 2025", 20, y);
+            doc.text("Vision Management © 2025", 120, y);
+
+            // Save PDF
+            doc.save(`${employee.name.replace(/\s+/g, "_")}_Salary_Slip.pdf`);
+
+        } catch (err) {
+            console.error("Error generating PDF:", err);
+            alert("Failed to generate PDF. Check console or logo file.");
+        }
     };
 
     return (
@@ -297,14 +422,29 @@ export default function EmployeeManagement() {
                                 onChange={(e) => setBranchName(e.target.value)}
                                 sx={{ minWidth: 220 }}
                             />
+                            <FormControl size="small" sx={{ minWidth: 220 }}>
+                                <InputLabel>Filter by Month</InputLabel>
+                                <Select
+                                    value={selectedMonth}
+                                    label="Filter by Month"
+                                    onChange={(e) => setSelectedMonth(e.target.value as string)}
+                                >
+                                    {generateMonthOptions().map((option) => (
+                                        <MenuItem key={option.value} value={option.value}>
+                                            {option.label}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
 
-                            {(searchName || branchName) && (
+                            {(searchName || branchName|| selectedMonth !== "all") && (
                                 <Button
                                     variant="outlined"
                                     size="small"
                                     onClick={() => {
                                         setSearchName("");
                                         setBranchName("");
+                                        setSelectedMonth("all");
                                     }}
                                 >
                                     Clear Filters
@@ -316,7 +456,9 @@ export default function EmployeeManagement() {
                             variant="contained"
                             startIcon={<Add />}
                             onClick={() => { resetForm(); setOpen(true); }}
-                            sx={{ borderRadius: 2, px: 3 }}
+                            sx={{ borderRadius: 2, px: 3, fontSize: '12px' }}
+                            size="small"
+
                         >
                             Add Employee
                         </Button>
@@ -336,6 +478,7 @@ export default function EmployeeManagement() {
                                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Loan Deduction</TableCell>
                                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Gross Pay</TableCell>
                                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Loan Remaining</TableCell>
+                                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Monthly Salary</TableCell>
                                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Actions</TableCell>
                                 </TableRow>
                             </TableHead>
@@ -383,6 +526,9 @@ export default function EmployeeManagement() {
                                                 <AccountBalance sx={{ mr: 1, fontSize: 16 }} />
                                                 {emp.loanRemaining}
                                             </Box>
+                                        </TableCell>
+                                        <TableCell sx={{ fontFamily: 'monospace' }}>
+                                            {new Date(emp?.createdAt || new Date()).toLocaleString('en-US', { month: 'long' })}
                                         </TableCell>
                                         <TableCell>
                                             <IconButton
