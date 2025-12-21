@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Box, Typography, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Select, MenuItem, FormControl, InputLabel, Card, CardContent, Chip, Avatar } from "@mui/material";
+import { Box, Typography, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Select, MenuItem, FormControl, InputLabel, Card, CardContent, Chip, Avatar, TablePagination } from "@mui/material";
 import { Delete, Edit, Add, Person, Business, AttachMoney, AccountBalance, Visibility, PictureAsPdf, Print } from "@mui/icons-material";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable'; // This enables autoTable
@@ -31,7 +31,16 @@ export default function EmployeeManagement() {
     const [searchName, setSearchName] = useState("");
     const [searchId, setSearchId] = useState("");
     const [branchName, setBranchName] = useState("");
-
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const handleChangePage = (event: unknown, newPage: number) => {
+        setPage(newPage);
+    };
+    
+    const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setRowsPerPage(parseInt(event.target.value, 10));
+        setPage(0); // Reset to first page when changing rows per page
+    };
     const [form, setForm] = useState({
         name: "",
         branchId: "",
@@ -493,7 +502,9 @@ export default function EmployeeManagement() {
                                         </TableCell>
                                     </TableRow>
                                 )}
-                                {filteredEmployees?.map((emp) => (
+                                {filteredEmployees
+    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+    .map((emp) => (
                                     <TableRow key={emp._id} hover sx={{ '&:hover': { bgcolor: 'grey.50' } }}>
                                         <TableCell>
                                             <Box display="flex" alignItems="center">
@@ -558,6 +569,19 @@ export default function EmployeeManagement() {
                                 ))}
                             </TableBody>
                         </Table>
+                        <TablePagination
+                            rowsPerPageOptions={[10, 25, 50]}
+                            component="div"
+                            count={filteredEmployees.length}
+                            rowsPerPage={rowsPerPage}
+                            page={page}
+                            onPageChange={handleChangePage}
+                            onRowsPerPageChange={handleChangeRowsPerPage}
+                            sx={{
+                                borderTop: '1px solid',
+                                borderColor: 'divider',
+                            }}
+                        />
                     </TableContainer>
                 </CardContent>
             </Card>
