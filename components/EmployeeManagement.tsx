@@ -22,6 +22,7 @@ interface Employee {
     foodDeduction: number;
     loanDeduction: number;
     loanRemaining: number;
+    createdAt: Date;
 }
 
 export default function EmployeeManagement() {
