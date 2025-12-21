@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Box, Typography, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Select, MenuItem, FormControl, InputLabel, Card, CardContent, Chip, Avatar, TablePagination } from "@mui/material";
 import { Delete, Edit, Add, Person, Business, AttachMoney, AccountBalance, Visibility, PictureAsPdf, Print } from "@mui/icons-material";
 import jsPDF from 'jspdf';
-import 'jspdf-autotable'; // This enables autoTable
+import { autoTable } from 'jspdf-autotable';  // Named import
 const logoUrl = "/visionlogo.jpeg"; // served statically
 interface Branch {
     _id: string;
@@ -36,7 +36,7 @@ export default function EmployeeManagement() {
     const handleChangePage = (event: unknown, newPage: number) => {
         setPage(newPage);
     };
-    
+
     const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
         setRowsPerPage(parseInt(event.target.value, 10));
         setPage(0); // Reset to first page when changing rows per page
@@ -208,13 +208,14 @@ export default function EmployeeManagement() {
                 <title>Salary Slip - ${employee.name}</title>
                 <style>
                     body { font-family: Arial, sans-serif; padding: 30px; color: #333; }
-                    .header { display: flex; align-items: center; border-bottom: 2px solid #1976d2; padding-bottom: 10px; }
+                    .header { display: flex; align-items: center; justify-content: center; border-bottom: 2px solid #1976d2; padding-bottom: 10px; }
                     .logo { height: 80px; margin-right: 15px; }
                     .company { font-size: 22px; font-weight: bold; color: #1976d2; }
                     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
                     th, td { padding: 10px; border: 1px solid #ddd; }
                     th { background: #f5f7fa; text-align: left; }
                     .total { font-weight: bold; background: #e3f2fd; }
+                    .p{font-size: 24px;  fontweight: bolder;}
                 </style>
             </head>
             <body>
@@ -224,8 +225,8 @@ export default function EmployeeManagement() {
                     <div class="company">Vision Management</div>
                 </div>
     
-                <p><strong>Employee:</strong> ${employee.name}</p>
-                <p><strong>Branch:</strong> ${employee.branchId?.name || ""}</p>
+                <p class="p"><strong>Employee:</strong> ${employee.name}</p>
+                <p class="p"><strong>Branch:</strong> ${employee.branchId?.name || ""}</p>
     
                 <h3>Earnings</h3>
                 <table>
@@ -265,136 +266,164 @@ export default function EmployeeManagement() {
         printWindow.print();
     };
 
-
-
-    const handleDownloadPDF = async (employee: Employee | null) => {
+    const handleDownloadPDF = (employee: Employee | null) => {
         if (!employee) return;
-
+    
         const doc = new jsPDF("p", "mm", "a4");
-
+    
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const margin = 15;
+        let yPosition = 20;
+    
+        // Logo
         try {
-            // Load logo safely
-            let logoData = null;
-            try {
-                const img = new Image();
-                img.src = logoUrl;
-                await new Promise((resolve, reject) => {
-                    img.onload = resolve;
-                    img.onerror = reject;
-                });
-                const canvas = document.createElement("canvas");
-                canvas.width = img.width;
-                canvas.height = img.height;
-                const ctx = canvas.getContext("2d");
-                if (ctx) {
-                    ctx.drawImage(img, 0, 0);
-                    logoData = canvas.toDataURL("image/jpeg");
-                }
-            } catch (e) {
-                console.warn("Logo not found or failed to load – continuing without logo");
-            }
-
-            let y = 20; // Starting position
-
-            // Logo
-            if (logoData) {
-                doc.addImage(logoData, "JPEG", 15, y, 40, 30);
-                y += 40;
-            } else {
-                y += 10;
-            }
-
-            // Company Name
-            doc.setFontSize(22);
-            doc.setFont("helvetica", "bold");
-            doc.text("Vision Management", 70, y);
-            y += 10;
-
-            // Title
-            doc.setFontSize(18);
-            doc.text("Salary Slip", 70, y);
-            y += 15;
-
-            // Employee Details
-            doc.setFontSize(12);
-            doc.setFont("helvetica", "normal");
-            doc.text(`Employee Name: ${employee.name}`, 20, y);
-            y += 8;
-            doc.text(`Branch: ${employee.branchId?.name || "N/A"}`, 20, y);
-            y += 15;
-
-            // Earnings
-            doc.setFontSize(14);
-            doc.setFont("helvetica", "bold");
-            doc.text("Earnings", 20, y);
-            y += 10;
-
-            doc.setFontSize(12);
-            doc.setFont("helvetica", "normal");
-            doc.text(`Basic Pay:           ${employee.basicPay.toFixed(2)}`, 30, y);
-            y += 8;
-            doc.text(`Product Rebate:      ${employee.productRebate.toFixed(2)}`, 30, y);
-            y += 8;
-            doc.text(`Points Rebate:       ${employee.pointsRebate.toFixed(2)}`, 30, y);
-            y += 8;
-            doc.text(`Performance Rebate:  ${employee.performanceRebate.toFixed(2)}`, 30, y);
-            y += 10;
-            doc.text(`Gross Pay:           ${calculateGross(employee).toFixed(2)}`, 30, y);
-            y += 20;
-
-            // Deductions
-            doc.setFontSize(14);
-            doc.setFont("helvetica", "bold");
-            doc.text("Deductions", 20, y);
-            y += 10;
-
-            doc.setFontSize(12);
-            doc.setFont("helvetica", "normal");
-            doc.text(`House Rent:          ${employee.houseRentDeduction.toFixed(2)}`, 30, y);
-            y += 8;
-            doc.text(`Food:                ${employee.foodDeduction.toFixed(2)}`, 30, y);
-            y += 8;
-            doc.text(`Loan Deduction:      ${employee.loanDeduction.toFixed(2)}`, 30, y);
-            y += 10;
-            doc.text(`Net Pay:             ${calculateNet(employee).toFixed(2)}`, 30, y);
-            y += 15;
-
-            // Loan Remaining
-            doc.text(`Loan Remaining:      ${employee.loanRemaining.toFixed(2)}`, 30, y);
-            y += 25;
-
-            // Terms and Conditions
-            doc.setFontSize(12);
-            doc.setFont("helvetica", "bold");
-            doc.text("Terms and Conditions", 20, y);
-            y += 8;
-
-            doc.setFontSize(10);
-            doc.setFont("helvetica", "normal");
-            doc.text("• Salary is paid on the last working day of the month.", 25, y);
-            y += 6;
-            doc.text("• All deductions are as per company policy and law.", 25, y);
-            y += 6;
-            doc.text("• Loan repayments are deducted automatically until cleared.", 25, y);
-            y += 6;
-            doc.text("• This is a system-generated document. No signature required.", 25, y);
-            y += 6;
-            doc.text("• Employees must maintain confidentiality of salary details.", 25, y);
-            y += 15;
-
-            // Footer with date
-            doc.setFontSize(10);
-            doc.setTextColor(100);
-            doc.text("Generated on: 21 December 2025", 20, y);
-            doc.text("Vision Management © 2025", 120, y);
-
-            // Save PDF
-            doc.save(`${employee.name.replace(/\s+/g, "_")}_Salary_Slip.pdf`);
-
-        } catch (err) {
-            console.error("Error generating PDF:", err);
-            alert("Failed to generate PDF. Check console or logo file.");
+            doc.addImage(logoUrl, "JPEG", margin, yPosition, 40, 40);
+        } catch (e) {
+            console.warn("Logo not loaded");
         }
+    
+        // Company Name & Title
+        doc.setFontSize(24);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(25, 118, 210); // MUI primary blue
+        doc.text("Vision Management", margin + 50, yPosition + 15);
+    
+        doc.setFontSize(18);
+        doc.setTextColor(0);
+        doc.text("Salary Slip", margin + 50, yPosition + 25);
+    
+        yPosition += 50;
+    
+        // Employee Details
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text("Employee Name:", margin, yPosition);
+        doc.setFont("helvetica", "normal");
+        doc.text(employee.name, margin + 50, yPosition);
+    
+        yPosition += 10;
+        doc.setFont("helvetica", "bold");
+        doc.text("Branch:", margin, yPosition);
+        doc.setFont("helvetica", "normal");
+        doc.text(employee.branchId?.name || "N/A", margin + 50, yPosition);
+    
+        yPosition += 20;
+    
+        // Earnings Table
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(25, 118, 210);
+        doc.text("Earnings", margin, yPosition);
+        yPosition += 10;
+    
+        autoTable(doc, {
+            startY: yPosition,
+            head: [["Description", "Amount"]],
+            body: [
+                ["Basic Pay", employee.basicPay.toFixed(2)],
+                ["Product Rebate", employee.productRebate.toFixed(2)],
+                ["Points Rebate", employee.pointsRebate.toFixed(2)],
+                ["Performance Rebate", employee.performanceRebate.toFixed(2)],
+                ["Gross Pay", calculateGross(employee).toFixed(2)],
+            ],
+            theme: "grid",
+            headStyles: { fillColor: [25, 118, 210], textColor: 255, fontStyle: "bold" },
+            styles: { fontSize: 11, cellPadding: 5 },
+            columnStyles: { 1: { halign: "right", fontStyle: "bold" } },
+            margin: { left: margin, right: margin },
+        });
+    
+        yPosition = (doc as any).lastAutoTable.finalY + 20;
+    
+        // Deductions Table
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(244, 67, 54); // MUI error red
+        doc.text("Deductions", margin, yPosition);
+        yPosition += 10;
+    
+        autoTable(doc, {
+            startY: yPosition,
+            head: [["Description", "Amount"]],
+            body: [
+                ["House Rent Deduction", employee.houseRentDeduction.toFixed(2)],
+                ["Food Deduction", employee.foodDeduction.toFixed(2)],
+                ["Loan Deduction", employee.loanDeduction.toFixed(2)],
+                ["Total Deductions", (
+                    employee.houseRentDeduction +
+                    employee.foodDeduction +
+                    employee.loanDeduction
+                ).toFixed(2)],
+            ],
+            theme: "grid",
+            headStyles: { fillColor: [244, 67, 54], textColor: 255, fontStyle: "bold" },
+            styles: { fontSize: 11, cellPadding: 5 },
+            columnStyles: { 1: { halign: "right", fontStyle: "bold" } },
+            margin: { left: margin, right: margin },
+        });
+    
+        yPosition = (doc as any).lastAutoTable.finalY + 15;
+    
+        // Net Pay Highlight
+        const netPay = calculateNet(employee);
+        doc.setFillColor(232, 245, 233); // light green background
+        doc.rect(margin, yPosition, pageWidth - 2 * margin, 14, "F");
+        doc.setFontSize(16);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(46, 125, 50); // success green
+        doc.text(`Net Payable Salary: ${netPay.toFixed(2)}`, pageWidth / 2, yPosition + 9, { align: "center" });
+    
+        yPosition += 30;
+    
+        // Outstanding Loan (if any)
+        if (employee.loanRemaining > 0) {
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(255, 152, 0); // warning orange
+            doc.text(`Outstanding Loan Amount: ${employee.loanRemaining.toFixed(2)}`, margin, yPosition);
+            yPosition += 20;
+        }
+    
+        // Terms and Conditions Section
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(0);
+        doc.text("Terms and Conditions", margin, yPosition);
+        yPosition += 8;
+    
+        const terms = [
+            "1. Salary payments are made on the last working day of each month.",
+            "2. All deductions are as per company policy and applicable laws.",
+            "3. Loan repayments will be deducted from salary until the loan is fully repaid.",
+            "4. Employees must maintain confidentiality of company information.",
+            "5. Any changes to salary components must be approved by management.",
+            "6. This document is generated electronically and is legally binding.",
+        ];
+    
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(70, 70, 70);
+        terms.forEach((term) => {
+            const splitTerm = doc.splitTextToSize(term, pageWidth - 2 * margin);
+            doc.text(splitTerm, margin, yPosition);
+            yPosition += splitTerm.length * 5 + 2; // spacing between lines
+        });
+    
+        yPosition += 10;
+    
+        // Footer
+        const pageHeight = doc.internal.pageSize.getHeight();
+        doc.setFontSize(9);
+        doc.setTextColor(100);
+        doc.text("This is a system-generated document. No signature required.", margin, pageHeight - 10);
+    
+        // Optional: Add date
+        const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+        doc.text(`Generated on: ${today}`, pageWidth - margin, pageHeight - 10, { align: "right" });
+    
+        // Save PDF
+        const fileName = `Salary_Slip_${employee.name.replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`;
+        doc.save(fileName);
     };
 
     return (
@@ -447,7 +476,7 @@ export default function EmployeeManagement() {
                                 </Select>
                             </FormControl>
 
-                            {(searchName || branchName|| selectedMonth !== "all") && (
+                            {(searchName || branchName || selectedMonth !== "all") && (
                                 <Button
                                     variant="outlined"
                                     size="small"
@@ -503,70 +532,70 @@ export default function EmployeeManagement() {
                                     </TableRow>
                                 )}
                                 {filteredEmployees
-    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-    .map((emp) => (
-                                    <TableRow key={emp._id} hover sx={{ '&:hover': { bgcolor: 'grey.50' } }}>
-                                        <TableCell>
-                                            <Box display="flex" alignItems="center">
-                                                <Avatar sx={{ width: 32, height: 32, mr: 2, bgcolor: 'secondary.main' }}>
-                                                    {emp.name.charAt(0).toUpperCase()}
-                                                </Avatar>
-                                                <Typography variant="body2" fontWeight="medium">{emp.name}</Typography>
-                                            </Box>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                icon={<Business />}
-                                                label={emp.branchId?.name || ''}
-                                                size="small"
-                                                variant="outlined"
-                                                color="primary"
-                                            />
-                                        </TableCell>
-                                        <TableCell sx={{ fontFamily: 'monospace' }}>{emp.basicPay}</TableCell>
-                                        <TableCell sx={{ fontFamily: 'monospace' }}>{emp.productRebate}</TableCell>
-                                        <TableCell sx={{ fontFamily: 'monospace' }}>{emp.pointsRebate}</TableCell>
-                                        <TableCell sx={{ fontFamily: 'monospace' }}>{emp.performanceRebate}</TableCell>
-                                        <TableCell sx={{ fontFamily: 'monospace' }}>{emp.houseRentDeduction}</TableCell>
-                                        <TableCell sx={{ fontFamily: 'monospace' }}>{emp.foodDeduction}</TableCell>
-                                        <TableCell sx={{ fontFamily: 'monospace' }}>{emp.loanDeduction}</TableCell>
-                                        <TableCell sx={{ fontFamily: 'monospace', fontWeight: 'bold', color: 'success.main' }}>
-                                            {calculateGross(emp)}
-                                        </TableCell>
-                                        <TableCell sx={{ fontFamily: 'monospace', color: 'warning.main' }}>
-                                            <Box display="flex" alignItems="center">
-                                                <AccountBalance sx={{ mr: 1, fontSize: 16 }} />
-                                                {emp.loanRemaining}
-                                            </Box>
-                                        </TableCell>
-                                        <TableCell sx={{ fontFamily: 'monospace' }}>
-                                            {new Date(emp?.createdAt || new Date()).toLocaleString('en-US', { month: 'long' })}
-                                        </TableCell>
-                                        <TableCell>
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => handleView(emp)}
-                                                sx={{ color: 'info.main', mr: 1 }}
-                                            >
-                                                <Visibility fontSize="small" />
-                                            </IconButton>
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => handleEdit(emp)}
-                                                sx={{ color: 'primary.main', mr: 1 }}
-                                            >
-                                                <Edit fontSize="small" />
-                                            </IconButton>
-                                            <IconButton
-                                                size="small"
-                                                onClick={() => handleDelete(emp._id)}
-                                                sx={{ color: 'error.main' }}
-                                            >
-                                                <Delete fontSize="small" />
-                                            </IconButton>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
+                                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                                    .map((emp) => (
+                                        <TableRow key={emp._id} hover sx={{ '&:hover': { bgcolor: 'grey.50' } }}>
+                                            <TableCell>
+                                                <Box display="flex" alignItems="center">
+                                                    <Avatar sx={{ width: 32, height: 32, mr: 2, bgcolor: 'secondary.main' }}>
+                                                        {emp.name.charAt(0).toUpperCase()}
+                                                    </Avatar>
+                                                    <Typography variant="body2" fontWeight="medium">{emp.name}</Typography>
+                                                </Box>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Chip
+                                                    icon={<Business />}
+                                                    label={emp.branchId?.name || ''}
+                                                    size="small"
+                                                    variant="outlined"
+                                                    color="primary"
+                                                />
+                                            </TableCell>
+                                            <TableCell sx={{ fontFamily: 'monospace' }}>{emp.basicPay}</TableCell>
+                                            <TableCell sx={{ fontFamily: 'monospace' }}>{emp.productRebate}</TableCell>
+                                            <TableCell sx={{ fontFamily: 'monospace' }}>{emp.pointsRebate}</TableCell>
+                                            <TableCell sx={{ fontFamily: 'monospace' }}>{emp.performanceRebate}</TableCell>
+                                            <TableCell sx={{ fontFamily: 'monospace' }}>{emp.houseRentDeduction}</TableCell>
+                                            <TableCell sx={{ fontFamily: 'monospace' }}>{emp.foodDeduction}</TableCell>
+                                            <TableCell sx={{ fontFamily: 'monospace' }}>{emp.loanDeduction}</TableCell>
+                                            <TableCell sx={{ fontFamily: 'monospace', fontWeight: 'bold', color: 'success.main' }}>
+                                                {calculateGross(emp)}
+                                            </TableCell>
+                                            <TableCell sx={{ fontFamily: 'monospace', color: 'warning.main' }}>
+                                                <Box display="flex" alignItems="center">
+                                                    <AccountBalance sx={{ mr: 1, fontSize: 16 }} />
+                                                    {emp.loanRemaining}
+                                                </Box>
+                                            </TableCell>
+                                            <TableCell sx={{ fontFamily: 'monospace' }}>
+                                                {new Date(emp?.createdAt || new Date()).toLocaleString('en-US', { month: 'long' })}
+                                            </TableCell>
+                                            <TableCell>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => handleView(emp)}
+                                                    sx={{ color: 'info.main', mr: 1 }}
+                                                >
+                                                    <Visibility fontSize="small" />
+                                                </IconButton>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => handleEdit(emp)}
+                                                    sx={{ color: 'primary.main', mr: 1 }}
+                                                >
+                                                    <Edit fontSize="small" />
+                                                </IconButton>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => handleDelete(emp._id)}
+                                                    sx={{ color: 'error.main' }}
+                                                >
+                                                    <Delete fontSize="small" />
+                                                </IconButton>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
                             </TableBody>
                         </Table>
                         <TablePagination
