@@ -201,6 +201,10 @@ export default function EmployeeManagement() {
 
         const printWindow = window.open("", "_blank");
         if (!printWindow) return;
+        const salaryMonth = new Date(employee?.createdAt || new Date()).toLocaleString("en-US", {
+            month: "long",
+            year: "numeric",
+        });
 
         printWindow.document.write(`
             <html>
@@ -222,8 +226,9 @@ export default function EmployeeManagement() {
     
                 <div class="header">
                     <img src="${logoUrl}" class="logo" />
-                    <div class="company">Vision Management</div>
-                </div>
+                    <div class="company">Secure Vision</div>
+                    </div>
+                    <h2>Salary Slip for Month of ${salaryMonth}</h2>
     
                 <p class="p"><strong>Employee:</strong> ${employee.name}</p>
                 <p class="p"><strong>Branch:</strong> ${employee.branchId?.name || ""}</p>
@@ -268,54 +273,61 @@ export default function EmployeeManagement() {
 
     const handleDownloadPDF = (employee: Employee | null) => {
         if (!employee) return;
-    
+
         const doc = new jsPDF("p", "mm", "a4");
-    
+
         const pageWidth = doc.internal.pageSize.getWidth();
         const margin = 15;
         let yPosition = 20;
-    
+
         // Logo
         try {
             doc.addImage(logoUrl, "JPEG", margin, yPosition, 40, 40);
         } catch (e) {
             console.warn("Logo not loaded");
         }
-    
-        // Company Name & Title
-        doc.setFontSize(24);
+
+        // Company Name
+        doc.setFontSize(24); // increased
         doc.setFont("helvetica", "bold");
-        doc.setTextColor(25, 118, 210); // MUI primary blue
-        doc.text("Vision Management", margin + 50, yPosition + 15);
-    
+        doc.setTextColor(25, 118, 210);
+        doc.text("Secure Vision", margin + 50, yPosition + 14);
+
+        const salaryMonth = new Date(employee?.createdAt || new Date()).toLocaleString("en-US", {
+            month: "long",
+            year: "numeric",
+        });
+
         doc.setFontSize(18);
-        doc.setTextColor(0);
-        doc.text("Salary Slip", margin + 50, yPosition + 25);
-    
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(90);
+        doc.text(`Salary Slip for Month ${salaryMonth}`, margin + 50, yPosition + 33);
+
+
         yPosition += 50;
-    
+
         // Employee Details
-        doc.setFontSize(12);
+        doc.setFontSize(18);
         doc.setFont("helvetica", "bold");
-        doc.text("Employee Name:", margin, yPosition);
+        doc.text("Employee:", margin, yPosition);
         doc.setFont("helvetica", "normal");
         doc.text(employee.name, margin + 50, yPosition);
-    
+
         yPosition += 10;
         doc.setFont("helvetica", "bold");
         doc.text("Branch:", margin, yPosition);
         doc.setFont("helvetica", "normal");
         doc.text(employee.branchId?.name || "N/A", margin + 50, yPosition);
-    
+
         yPosition += 20;
-    
+
         // Earnings Table
         doc.setFontSize(14);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(25, 118, 210);
         doc.text("Earnings", margin, yPosition);
         yPosition += 10;
-    
+
         autoTable(doc, {
             startY: yPosition,
             head: [["Description", "Amount"]],
@@ -332,16 +344,16 @@ export default function EmployeeManagement() {
             columnStyles: { 1: { halign: "right", fontStyle: "bold" } },
             margin: { left: margin, right: margin },
         });
-    
+
         yPosition = (doc as any).lastAutoTable.finalY + 20;
-    
+
         // Deductions Table
         doc.setFontSize(14);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(244, 67, 54); // MUI error red
         doc.text("Deductions", margin, yPosition);
         yPosition += 10;
-    
+
         autoTable(doc, {
             startY: yPosition,
             head: [["Description", "Amount"]],
@@ -361,9 +373,9 @@ export default function EmployeeManagement() {
             columnStyles: { 1: { halign: "right", fontStyle: "bold" } },
             margin: { left: margin, right: margin },
         });
-    
+
         yPosition = (doc as any).lastAutoTable.finalY + 15;
-    
+
         // Net Pay Highlight
         const netPay = calculateNet(employee);
         doc.setFillColor(232, 245, 233); // light green background
@@ -372,9 +384,9 @@ export default function EmployeeManagement() {
         doc.setFont("helvetica", "bold");
         doc.setTextColor(46, 125, 50); // success green
         doc.text(`Net Payable Salary: ${netPay.toFixed(2)}`, pageWidth / 2, yPosition + 9, { align: "center" });
-    
+
         yPosition += 30;
-    
+
         // Outstanding Loan (if any)
         if (employee.loanRemaining > 0) {
             doc.setFontSize(12);
@@ -383,14 +395,14 @@ export default function EmployeeManagement() {
             doc.text(`Outstanding Loan Amount: ${employee.loanRemaining.toFixed(2)}`, margin, yPosition);
             yPosition += 20;
         }
-    
+
         // Terms and Conditions Section
         doc.setFontSize(14);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(0);
         doc.text("Terms and Conditions", margin, yPosition);
         yPosition += 8;
-    
+
         const terms = [
             "1. Salary payments are made on the last working day of each month.",
             "2. All deductions are as per company policy and applicable laws.",
@@ -399,7 +411,7 @@ export default function EmployeeManagement() {
             "5. Any changes to salary components must be approved by management.",
             "6. This document is generated electronically and is legally binding.",
         ];
-    
+
         doc.setFontSize(10);
         doc.setFont("helvetica", "normal");
         doc.setTextColor(70, 70, 70);
@@ -408,19 +420,19 @@ export default function EmployeeManagement() {
             doc.text(splitTerm, margin, yPosition);
             yPosition += splitTerm.length * 5 + 2; // spacing between lines
         });
-    
+
         yPosition += 10;
-    
+
         // Footer
         const pageHeight = doc.internal.pageSize.getHeight();
         doc.setFontSize(9);
         doc.setTextColor(100);
         doc.text("This is a system-generated document. No signature required.", margin, pageHeight - 10);
-    
+
         // Optional: Add date
         const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
         doc.text(`Generated on: ${today}`, pageWidth - margin, pageHeight - 10, { align: "right" });
-    
+
         // Save PDF
         const fileName = `Salary_Slip_${employee.name.replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`;
         doc.save(fileName);
