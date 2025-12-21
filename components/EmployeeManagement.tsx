@@ -290,7 +290,7 @@ export default function EmployeeManagement() {
         // Company Name
         doc.setFontSize(24); // increased
         doc.setFont("helvetica", "bold");
-        doc.setTextColor(25, 118, 210);
+        doc.setTextColor(158, 158, 158);
         doc.text("Secure Vision", margin + 50, yPosition + 14);
 
         const salaryMonth = new Date(employee?.createdAt || new Date()).toLocaleString("en-US", {
@@ -339,11 +339,24 @@ export default function EmployeeManagement() {
                 ["Gross Pay", calculateGross(employee).toFixed(2)],
             ],
             theme: "grid",
-            headStyles: { fillColor: [25, 118, 210], textColor: 255, fontStyle: "bold" },
-            styles: { fontSize: 11, cellPadding: 5 },
-            columnStyles: { 1: { halign: "right", fontStyle: "bold" } },
+            headStyles: {
+                fillColor: [158, 158, 158], // MUI grey
+                textColor: 255,
+                fontStyle: "bold",
+                halign: "center", // 👈 center header text
+            },
+            styles: {
+                fontSize: 11,
+                cellPadding: 5,
+                halign: "center", // 👈 center body cells
+            },
+            columnStyles: {
+                0: { halign: "center" }, // Description column
+                1: { halign: "center", fontStyle: "bold" }, // Amount column
+            },
             margin: { left: margin, right: margin },
         });
+        
 
         yPosition = (doc as any).lastAutoTable.finalY + 20;
 
@@ -368,9 +381,11 @@ export default function EmployeeManagement() {
                 ).toFixed(2)],
             ],
             theme: "grid",
-            headStyles: { fillColor: [244, 67, 54], textColor: 255, fontStyle: "bold" },
-            styles: { fontSize: 11, cellPadding: 5 },
-            columnStyles: { 1: { halign: "right", fontStyle: "bold" } },
+            headStyles: { fillColor: [244, 67, 54], textColor: 255, fontStyle: "bold" ,        halign: "center", // center header text
+                },
+            styles: { fontSize: 11, cellPadding: 5 ,        halign: "center", // center body cells
+                },
+            columnStyles: { 1: { halign: "center", fontStyle: "bold" } },
             margin: { left: margin, right: margin },
         });
 
@@ -382,8 +397,8 @@ export default function EmployeeManagement() {
         doc.rect(margin, yPosition, pageWidth - 2 * margin, 14, "F");
         doc.setFontSize(16);
         doc.setFont("helvetica", "bold");
-        doc.setTextColor(46, 125, 50); // success green
-        doc.text(`Net Payable Salary: ${netPay.toFixed(2)}`, pageWidth / 2, yPosition + 9, { align: "center" });
+        doc.setTextColor(158, 158, 158); // gray color
+        doc.text(`Net Pay: ${netPay.toFixed(2)}`, pageWidth / 2, yPosition + 9, { align: "center" });
 
         yPosition += 30;
 
@@ -391,10 +406,15 @@ export default function EmployeeManagement() {
         if (employee.loanRemaining > 0) {
             doc.setFontSize(12);
             doc.setFont("helvetica", "bold");
-            doc.setTextColor(255, 152, 0); // warning orange
-            doc.text(`Outstanding Loan Amount: ${employee.loanRemaining.toFixed(2)}`, margin, yPosition);
+            doc.setTextColor(244, 67, 54); // red color
+            doc.text(
+                `Remaining Loan Balance: ${employee.loanRemaining.toFixed(2)}`,
+                margin,
+                yPosition
+            );
             yPosition += 20;
         }
+        
 
         // Terms and Conditions Section
         doc.setFontSize(14);
