@@ -31,4 +31,8 @@ const EmployeeSchema: Schema = new Schema<IEmployee>(
     { timestamps: true }
 );
 
+// Add index for better query performance
+EmployeeSchema.index({ branchId: 1 });
+EmployeeSchema.index({ name: 1 }); // For search
+
 export const Employee = mongoose.models.Employee || mongoose.model<IEmployee>("Employee", EmployeeSchema);

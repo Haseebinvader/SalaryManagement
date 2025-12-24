@@ -12,10 +12,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
         await connectDB();
         const { name } = await request.json();
-        const branch = await Branch.findByIdAndUpdate(id, { name }, { new: true });
+
+        if (!name || typeof name !== 'string' || name.trim() === "") {
+            return NextResponse.json({ error: "Branch name is required and must be a non-empty string" }, { status: 400 });
+        }
+
+        // Check for duplicate branch name, excluding current branch
+        const existingBranch = await Branch.findOne({ name: name.trim(), _id: { $ne: id } });
+        if (existingBranch) {
+            return NextResponse.json({ error: "Branch with this name already exists" }, { status: 409 });
+        }
+
+        const branch = await Branch.findByIdAndUpdate(id, { name: name.trim() }, { new: true });
         if (!branch) return NextResponse.json({ error: "Branch not found" }, { status: 404 });
         return NextResponse.json(branch);
-    } catch (error) {
+    } catch (error: any) {
+        console.error('PUT /branches/[id] error:', error);
         return NextResponse.json({ error: "Failed to update branch" }, { status: 500 });
     }
 }

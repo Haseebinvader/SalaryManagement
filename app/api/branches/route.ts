@@ -35,6 +35,12 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Branch name is required" }, { status: 400 });
         }
 
+        // Check for duplicate branch name
+        const existingBranch = await Branch.findOne({ name: name.trim() });
+        if (existingBranch) {
+            return NextResponse.json({ error: "Branch with this name already exists" }, { status: 409 });
+        }
+
         const branch = new Branch({ name: name.trim() });
         await branch.save();
         console.log("Branch created:", branch);

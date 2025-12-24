@@ -17,10 +17,10 @@ async function main() {
     const bcrypt = (await import("bcryptjs")).default;
 
     await connectDB();
-    const exists = await Admin.findOne({ email: "admin@example.com" });
+    const exists = await Admin.findOne({ email: "admin@securevision.com" });
     if (!exists) {
         const hashed = await bcrypt.hash("admin123", 10);
-        await Admin.create({ email: "admin@example.com", password: hashed });
+        await Admin.create({ email: "admin@securevision.com", password: hashed });
         console.log("Admin created!");
     } else {
         console.log("Admin already exists");

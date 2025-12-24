@@ -96,7 +96,15 @@ export default function EmployeeManagement() {
             const res = await fetch("/api/employees");
             if (!res.ok) throw new Error("Failed to fetch employees");
             const data = await res.json();
-            setEmployees(Array.isArray(data) ? data : []);
+            // Handle new API response structure with pagination
+            if (data.employees && Array.isArray(data.employees)) {
+                setEmployees(data.employees);
+            } else if (Array.isArray(data)) {
+                // Fallback for old structure
+                setEmployees(data);
+            } else {
+                setEmployees([]);
+            }
         } catch (error) {
             console.error(error);
             setEmployees([]);

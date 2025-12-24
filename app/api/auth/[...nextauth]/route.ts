@@ -10,7 +10,6 @@ export const authOptions: AuthOptions = {
                 password: { label: "Password", type: "password" },
             },
             async authorize(credentials) {
-                // Simple hardcoded admin check for demo
                 if (credentials?.email === "admin@securevision.com" && credentials?.password === "admin123") {
                     return { id: "admin", email: "admin@securevision.com" };
                 }

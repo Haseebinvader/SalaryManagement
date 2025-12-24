@@ -8,7 +8,7 @@ export async function POST() {
         await connectDB();
 
         // Check if admin already exists
-        const existingAdmin = await Admin.findOne({ email: 'admin@example.com' });
+        const existingAdmin = await Admin.findOne({ email: 'admin@securevision.com' });
         if (existingAdmin) {
             return NextResponse.json({ message: 'Admin already exists' });
         }
@@ -18,7 +18,7 @@ export async function POST() {
 
         // Create admin
         const admin = new Admin({
-            email: 'admin@example.com',
+            email: 'admin@securevision.com',
             password: hashedPassword,
         });
 
