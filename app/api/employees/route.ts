@@ -13,37 +13,55 @@ export async function GET(request: NextRequest) {
         await connectDB();
 
         const { searchParams } = new URL(request.url);
-        const page = parseInt(searchParams.get('page') || '1');
-        const limit = parseInt(searchParams.get('limit') || '10');
+        const pageParam = searchParams.get('page');
+        const limitParam = searchParams.get('limit');
         const search = searchParams.get('search') || '';
+        const searchId = searchParams.get('searchId') || '';
         const branchId = searchParams.get('branchId') || '';
-        const skip = (page - 1) * limit;
+        
+        // If pagination params are provided, use pagination; otherwise return all
+        const usePagination = pageParam !== null || limitParam !== null;
+        const page = pageParam ? parseInt(pageParam) : 1;
+        const limit = limitParam ? parseInt(limitParam) : 10;
+        const skip = usePagination ? (page - 1) * limit : 0;
 
         let query: any = {};
         if (search) {
             query.name = { $regex: search, $options: 'i' };
         }
+        if (searchId) {
+            query.employeeId = { $regex: searchId, $options: 'i' };
+        }
         if (branchId) {
             query.branchId = branchId;
         }
 
-        const employees = await Employee.find(query)
+        let employeesQuery = Employee.find(query)
             .populate('branchId')
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(limit);
+            .sort({ createdAt: -1 });
+        
+        if (usePagination) {
+            employeesQuery = employeesQuery.skip(skip).limit(limit);
+        }
 
+        const employees = await employeesQuery;
         const total = await Employee.countDocuments(query);
 
-        return NextResponse.json({
-            employees,
-            pagination: {
-                page,
-                limit,
-                total,
-                pages: Math.ceil(total / limit)
-            }
-        });
+        if (usePagination) {
+            return NextResponse.json({
+                employees,
+                pagination: {
+                    page,
+                    limit,
+                    total,
+                    pages: Math.ceil(total / limit)
+                }
+            });
+        } else {
+            return NextResponse.json({
+                employees
+            });
+        }
     } catch (error) {
         console.error('GET /employees error:', error);
         return NextResponse.json({ error: "Failed to fetch employees" }, { status: 500 });
@@ -59,11 +77,17 @@ export async function POST(request: NextRequest) {
         const data = await request.json();
 
         // Validation
+        if (!data.employeeId || typeof data.employeeId !== 'string' || data.employeeId.trim().length === 0) {
+            return NextResponse.json({ error: "Employee ID is required and must be a non-empty string" }, { status: 400 });
+        }
         if (!data.name || typeof data.name !== 'string' || data.name.trim().length === 0) {
             return NextResponse.json({ error: "Name is required and must be a non-empty string" }, { status: 400 });
         }
         if (!data.branchId || !/^[0-9a-fA-F]{24}$/.test(data.branchId)) {
             return NextResponse.json({ error: "Valid branchId is required" }, { status: 400 });
+        }
+        if (!data.salaryMonth || typeof data.salaryMonth !== 'string' || data.salaryMonth.trim().length === 0) {
+            return NextResponse.json({ error: "Salary Month is required and must be a non-empty string" }, { status: 400 });
         }
 
         // Check if branch exists
@@ -80,9 +104,25 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // Check for duplicate employeeId + salaryMonth combination
+        const trimmedEmployeeId = data.employeeId.trim();
+        const trimmedSalaryMonth = data.salaryMonth.trim();
+        const existingEmployee = await Employee.findOne({
+            employeeId: trimmedEmployeeId,
+            salaryMonth: trimmedSalaryMonth
+        });
+
+        if (existingEmployee) {
+            return NextResponse.json({
+                error: `An employee with ID "${trimmedEmployeeId}" already exists for the salary month "${trimmedSalaryMonth}". Please use a different month or update the existing record.`
+            }, { status: 409 });
+        }
+
         const employee = new Employee({
             ...data,
-            name: data.name.trim()
+            employeeId: trimmedEmployeeId,
+            name: data.name.trim(),
+            salaryMonth: trimmedSalaryMonth
         });
 
         await employee.save();

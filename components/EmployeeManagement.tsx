@@ -13,8 +13,10 @@ interface Branch {
 
 interface Employee {
     _id: string;
+    employeeId: string;
     name: string;
     branchId: Branch | null;
+    salaryMonth: string;
     basicPay: number;
     productRebate: number;
     pointsRebate: number;
@@ -45,9 +47,16 @@ export default function EmployeeManagement() {
         setRowsPerPage(parseInt(event.target.value, 10));
         setPage(0); // Reset to first page when changing rows per page
     };
+    const getInitialMonth = () => new Date().toLocaleString('en-US', { month: 'long' });
+    const getInitialYear = () => new Date().getFullYear().toString();
+
     const [form, setForm] = useState({
+        employeeId: "",
         name: "",
         branchId: "",
+        salaryMonth: "",
+        salaryMonthValue: getInitialMonth(),
+        salaryYearValue: getInitialYear(),
         basicPay: '',
         productRebate: '',
         pointsRebate: '',
@@ -80,16 +89,25 @@ export default function EmployeeManagement() {
     
     const filteredEmployees = employees.filter((emp) => {
         const matchName = emp.name.toLowerCase().includes(searchName.toLowerCase());
+        const matchId = emp.employeeId?.toLowerCase().includes(searchId.toLowerCase()) ?? true;
         const matchBranch = emp.branchId?.name.toLowerCase().includes(branchName.toLowerCase()) ?? true;
 
         let matchMonth = true;
-        if (selectedMonth !== "all" && emp.createdAt) {
-            const empDate = new Date(emp.createdAt);
-            const empMonthYear = `${empDate.getFullYear()}-${String(empDate.getMonth() + 1).padStart(2, '0')}`;
-            matchMonth = empMonthYear === selectedMonth;
+        if (selectedMonth !== "all" && emp.salaryMonth) {
+            // Convert salaryMonth (e.g., "December 2025") to format like "2025-12"
+            try {
+                const date = new Date(emp.salaryMonth + " 1");
+                if (!isNaN(date.getTime())) {
+                    const empMonthYear = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                    matchMonth = empMonthYear === selectedMonth;
+                }
+            } catch (e) {
+                // If parsing fails, check if it matches the selectedMonth format directly
+                matchMonth = emp.salaryMonth.toLowerCase().includes(selectedMonth.toLowerCase());
+            }
         }
 
-        return matchName && matchBranch && matchMonth;
+        return matchName && matchId && matchBranch && matchMonth;
     });
 
     useEffect(() => {
@@ -135,6 +153,10 @@ export default function EmployeeManagement() {
     };
 
     const handleSubmit = async () => {
+        if (!form.employeeId.trim()) {
+            toast.error("Please enter employee ID");
+            return;
+        }
         if (!form.name.trim()) {
             toast.error("Please enter employee name");
             return;
@@ -143,13 +165,38 @@ export default function EmployeeManagement() {
             toast.error("Please select a branch");
             return;
         }
+        if (!form.salaryMonthValue || !form.salaryYearValue) {
+            toast.error("Please select both month and year for salary");
+            return;
+        }
+
+        // Combine month and year into salaryMonth string
+        const trimmedSalaryMonth = `${form.salaryMonthValue} ${form.salaryYearValue}`;
+
+        // Check for duplicate employeeId + salaryMonth combination
+        const trimmedEmployeeId = form.employeeId.trim();
+        const duplicateEmployee = employees.find(
+            (emp) =>
+                emp.employeeId?.toLowerCase() === trimmedEmployeeId.toLowerCase() &&
+                emp.salaryMonth?.toLowerCase() === trimmedSalaryMonth.toLowerCase() &&
+                (!editing || emp._id !== editing._id) // Exclude current employee when editing
+        );
+
+        if (duplicateEmployee) {
+            toast.error(
+                `An employee with ID "${trimmedEmployeeId}" already exists for the salary month "${trimmedSalaryMonth}". Please use a different month or update the existing record.`
+            );
+            return;
+        }
 
         setSubmitting(true);
         try {
         const repaymentAmount = parseFloat(form.repaymentAmount) || 0;
         const dataToSend = {
-            name: form.name,
+            employeeId: trimmedEmployeeId,
+            name: form.name.trim(),
             branchId: form.branchId,
+            salaryMonth: trimmedSalaryMonth,
             basicPay: parseFloat(form.basicPay) || 0,
             productRebate: parseFloat(form.productRebate) || 0,
             pointsRebate: parseFloat(form.pointsRebate) || 0,
@@ -174,7 +221,9 @@ export default function EmployeeManagement() {
             setOpen(false);
             } else {
                 const errorData = await res.json().catch(() => ({}));
-                toast.error(errorData.message || (editing ? "Failed to update employee" : "Failed to add employee"));
+                // Show specific error message from backend, especially for duplicate entries
+                const errorMessage = errorData.error || errorData.message || (editing ? "Failed to update employee" : "Failed to add employee");
+                toast.error(errorMessage);
             }
         } catch (error) {
             console.error(error);
@@ -185,9 +234,15 @@ export default function EmployeeManagement() {
     };
 
     const resetForm = () => {
+        const currentYear = new Date().getFullYear();
+        const currentMonth = new Date().toLocaleString('en-US', { month: 'long' });
         setForm({
+            employeeId: "",
             name: "",
             branchId: "",
+            salaryMonth: "",
+            salaryMonthValue: currentMonth,
+            salaryYearValue: currentYear.toString(),
             basicPay: '',
             productRebate: '',
             pointsRebate: '',
@@ -201,11 +256,69 @@ export default function EmployeeManagement() {
         setEditing(null);
     };
 
+    // Helper function to parse salaryMonth string (e.g., "December 2025") into month and year
+    const parseSalaryMonth = (salaryMonth: string) => {
+        if (!salaryMonth) {
+            const now = new Date();
+            return {
+                month: now.toLocaleString('en-US', { month: 'long' }),
+                year: now.getFullYear().toString()
+            };
+        }
+        const parts = salaryMonth.trim().split(' ');
+        if (parts.length >= 2) {
+            return {
+                month: parts[0],
+                year: parts[parts.length - 1]
+            };
+        }
+        // Fallback: try to parse as date
+        try {
+            const date = new Date(salaryMonth + " 1");
+            if (!isNaN(date.getTime())) {
+                return {
+                    month: date.toLocaleString('en-US', { month: 'long' }),
+                    year: date.getFullYear().toString()
+                };
+            }
+        } catch (e) {
+            // Ignore parsing errors
+        }
+        const now = new Date();
+        return {
+            month: now.toLocaleString('en-US', { month: 'long' }),
+            year: now.getFullYear().toString()
+        };
+    };
+
+    // Generate month options
+    const getMonthOptions = () => {
+        return [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+    };
+
+    // Generate year options (current year ± 5 years)
+    const getYearOptions = () => {
+        const currentYear = new Date().getFullYear();
+        const years = [];
+        for (let i = currentYear - 5; i <= currentYear + 5; i++) {
+            years.push(i.toString());
+        }
+        return years;
+    };
+
     const handleEdit = (employee: Employee) => {
         setEditing(employee);
+        const { month, year } = parseSalaryMonth(employee.salaryMonth || '');
         setForm({
+            employeeId: employee.employeeId || '',
             name: employee.name,
             branchId: employee.branchId?._id || '',
+            salaryMonth: employee.salaryMonth || '',
+            salaryMonthValue: month,
+            salaryYearValue: year,
             basicPay: employee.basicPay.toString(),
             productRebate: employee.productRebate.toString(),
             pointsRebate: employee.pointsRebate.toString(),
@@ -255,7 +368,7 @@ export default function EmployeeManagement() {
 
         const printWindow = window.open("", "_blank");
         if (!printWindow) return;
-        const salaryMonth = new Date(employee?.createdAt || new Date()).toLocaleString("en-US", {
+        const salaryMonth = employee?.salaryMonth || new Date(employee?.createdAt || new Date()).toLocaleString("en-US", {
             month: "long",
             year: "numeric",
         });
@@ -347,7 +460,7 @@ export default function EmployeeManagement() {
         doc.setTextColor(158, 158, 158);
         doc.text("Secure Vision", margin + 50, yPosition + 14);
 
-        const salaryMonth = new Date(employee?.createdAt || new Date()).toLocaleString("en-US", {
+        const salaryMonth = employee?.salaryMonth || new Date(employee?.createdAt || new Date()).toLocaleString("en-US", {
             month: "long",
             year: "numeric",
         });
@@ -548,6 +661,14 @@ export default function EmployeeManagement() {
 
                             <TextField
                                 size="small"
+                                label="Search by Employee ID"
+                                value={searchId}
+                                onChange={(e) => setSearchId(e.target.value)}
+                                sx={{ minWidth: 220 }}
+                            />
+
+                            <TextField
+                                size="small"
                                 label="Search by Branch Name"
                                 value={branchName}
                                 onChange={(e) => setBranchName(e.target.value)}
@@ -568,12 +689,13 @@ export default function EmployeeManagement() {
                                 </Select>
                             </FormControl>
 
-                            {(searchName || branchName || selectedMonth !== "all") && (
+                            {(searchName || searchId || branchName || selectedMonth !== "all") && (
                                 <Button
                                     variant="outlined"
                                     size="small"
                                     onClick={() => {
                                         setSearchName("");
+                                        setSearchId("");
                                         setBranchName("");
                                         setSelectedMonth("all");
                                     }}
@@ -598,8 +720,10 @@ export default function EmployeeManagement() {
                         <Table>
                             <TableHead sx={{ bgcolor: 'grey.100' }}>
                                 <TableRow>
+                                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Employee ID</TableCell>
                                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Name</TableCell>
                                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Branch</TableCell>
+                                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Salary Month</TableCell>
                                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Basic Pay</TableCell>
                                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Product Rebate</TableCell>
                                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Points Rebate</TableCell>
@@ -609,20 +733,19 @@ export default function EmployeeManagement() {
                                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Loan Deduction</TableCell>
                                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Gross Pay</TableCell>
                                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Loan Remaining</TableCell>
-                                    <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Monthly Salary</TableCell>
                                     <TableCell sx={{ fontWeight: 'bold', fontSize: '0.875rem' }}>Actions</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
                                 {loading && filteredEmployees.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={13} align="center">
+                                        <TableCell colSpan={14} align="center">
                                             <CircularProgress size={24} sx={{ my: 2 }} />
                                         </TableCell>
                                     </TableRow>
                                 ) : filteredEmployees.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={13} align="center">
+                                        <TableCell colSpan={14} align="center">
                                             <Typography color="text.secondary">
                                                 No employees found
                                             </Typography>
@@ -633,6 +756,9 @@ export default function EmployeeManagement() {
                                     .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                                     .map((emp) => (
                                         <TableRow key={emp._id} hover sx={{ '&:hover': { bgcolor: 'grey.50' } }}>
+                                            <TableCell sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
+                                                {emp.employeeId || 'N/A'}
+                                            </TableCell>
                                             <TableCell>
                                                 <Box display="flex" alignItems="center">
                                                     <Avatar sx={{ width: 32, height: 32, mr: 2, bgcolor: 'secondary.main' }}>
@@ -650,6 +776,9 @@ export default function EmployeeManagement() {
                                                     color="primary"
                                                 />
                                             </TableCell>
+                                            <TableCell sx={{ fontFamily: 'monospace' }}>
+                                                {emp.salaryMonth || 'N/A'}
+                                            </TableCell>
                                             <TableCell sx={{ fontFamily: 'monospace' }}>{emp.basicPay}</TableCell>
                                             <TableCell sx={{ fontFamily: 'monospace' }}>{emp.productRebate}</TableCell>
                                             <TableCell sx={{ fontFamily: 'monospace' }}>{emp.pointsRebate}</TableCell>
@@ -665,9 +794,6 @@ export default function EmployeeManagement() {
                                                     <AccountBalance sx={{ mr: 1, fontSize: 16 }} />
                                                     {emp.loanRemaining}
                                                 </Box>
-                                            </TableCell>
-                                            <TableCell sx={{ fontFamily: 'monospace' }}>
-                                                {new Date(emp?.createdAt || new Date()).toLocaleString('en-US', { month: 'long', year: 'numeric' })}
                                             </TableCell>
                                             <TableCell>
                                                 <IconButton
@@ -741,12 +867,24 @@ export default function EmployeeManagement() {
                         <Box display="flex" gap={2}>
                             <TextField
                                 size="small"
+                                label="Employee ID"
+                                value={form.employeeId}
+                                onChange={(e) => setForm({ ...form, employeeId: e.target.value })}
+                                fullWidth
+                                variant="outlined"
+                                required
+                            />
+                            <TextField
+                                size="small"
                                 label="Employee Name"
                                 value={form.name}
                                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                                 fullWidth
                                 variant="outlined"
+                                required
                             />
+                        </Box>
+                        <Box display="flex" gap={2}>
                             <FormControl size="small" sx={{ minWidth: 200 }} variant="outlined">
                                 <InputLabel>Branch</InputLabel>
                                 <Select
@@ -760,6 +898,36 @@ export default function EmployeeManagement() {
                                                 <Business sx={{ mr: 1, fontSize: 18 }} />
                                                 {b.name}
                                             </Box>
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                            <FormControl size="small" sx={{ flex: '1 1 200px' }} variant="outlined">
+                                <InputLabel>Salary Month</InputLabel>
+                                <Select
+                                    value={form.salaryMonthValue}
+                                    onChange={(e) => setForm({ ...form, salaryMonthValue: e.target.value })}
+                                    label="Salary Month"
+                                    required
+                                >
+                                    {getMonthOptions().map((month) => (
+                                        <MenuItem key={month} value={month}>
+                                            {month}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                            <FormControl size="small" sx={{ flex: '1 1 150px' }} variant="outlined">
+                                <InputLabel>Year</InputLabel>
+                                <Select
+                                    value={form.salaryYearValue}
+                                    onChange={(e) => setForm({ ...form, salaryYearValue: e.target.value })}
+                                    label="Year"
+                                    required
+                                >
+                                    {getYearOptions().map((year) => (
+                                        <MenuItem key={year} value={year}>
+                                            {year}
                                         </MenuItem>
                                     ))}
                                 </Select>
@@ -926,15 +1094,31 @@ export default function EmployeeManagement() {
                             <>
                                 <Box display="flex" gap={2}>
                                     <TextField
+                                        label="Employee ID"
+                                        value={selectedEmployee.employeeId || ''}
+                                        fullWidth
+                                        InputProps={{ readOnly: true }}
+                                        variant="outlined"
+                                    />
+                                    <TextField
                                         label="Employee Name"
                                         value={selectedEmployee.name}
                                         fullWidth
                                         InputProps={{ readOnly: true }}
                                         variant="outlined"
                                     />
+                                </Box>
+                                <Box display="flex" gap={2}>
                                     <TextField
                                         label="Branch"
                                         value={selectedEmployee.branchId?.name || ''}
+                                        fullWidth
+                                        InputProps={{ readOnly: true }}
+                                        variant="outlined"
+                                    />
+                                    <TextField
+                                        label="Salary Month"
+                                        value={selectedEmployee.salaryMonth || ''}
                                         fullWidth
                                         InputProps={{ readOnly: true }}
                                         variant="outlined"
