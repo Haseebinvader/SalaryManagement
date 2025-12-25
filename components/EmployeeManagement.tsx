@@ -1,10 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Box, Typography, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Select, MenuItem, FormControl, InputLabel, Card, CardContent, Chip, Avatar, TablePagination } from "@mui/material";
+import { Box, Typography, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Select, MenuItem, FormControl, InputLabel, Card, CardContent, Chip, Avatar, TablePagination, CircularProgress, Backdrop } from "@mui/material";
 import { Delete, Edit, Add, Person, Business, AttachMoney, AccountBalance, Visibility, PictureAsPdf, Print } from "@mui/icons-material";
+import { toast } from "react-toastify";
 import jsPDF from 'jspdf';
-import { autoTable } from 'jspdf-autotable';  // Named import
-const logoUrl = "/visionlogo.jpeg"; // served statically
+import { autoTable } from 'jspdf-autotable';
+const logoUrl = "/visionlogo.jpeg"; 
 interface Branch {
     _id: string;
     name: string;
@@ -33,6 +34,9 @@ export default function EmployeeManagement() {
     const [branchName, setBranchName] = useState("");
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [loading, setLoading] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [deleting, setDeleting] = useState<string | null>(null);
     const handleChangePage = (event: unknown, newPage: number) => {
         setPage(newPage);
     };
@@ -59,6 +63,7 @@ export default function EmployeeManagement() {
     const [viewOpen, setViewOpen] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
     const [selectedMonth, setSelectedMonth] = useState("all");
+
     const generateMonthOptions = () => {
         const options = [
             { value: "all", label: "All Months" }
@@ -67,11 +72,12 @@ export default function EmployeeManagement() {
         for (let i = 0; i < 12; i++) {
             const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
             const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-            const label = date.toLocaleString('en-US', { month: 'long' });
+            const label = date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
             options.push({ value, label });
         }
         return options;
     };
+    
     const filteredEmployees = employees.filter((emp) => {
         const matchName = emp.name.toLowerCase().includes(searchName.toLowerCase());
         const matchBranch = emp.branchId?.name.toLowerCase().includes(branchName.toLowerCase()) ?? true;
@@ -92,6 +98,7 @@ export default function EmployeeManagement() {
     }, []);
 
     const fetchEmployees = async () => {
+        setLoading(true);
         try {
             const res = await fetch("/api/employees");
             if (!res.ok) throw new Error("Failed to fetch employees");
@@ -107,13 +114,12 @@ export default function EmployeeManagement() {
             }
         } catch (error) {
             console.error(error);
+            toast.error("Failed to fetch employees. Please try again.");
             setEmployees([]);
+        } finally {
+            setLoading(false);
         }
     };
-
-    console.log(employees);
-
-
 
     const fetchBranches = async () => {
         try {
@@ -123,11 +129,23 @@ export default function EmployeeManagement() {
             setBranches(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error(error);
+            toast.error("Failed to fetch branches. Please try again.");
             setBranches([]);
         }
     };
 
     const handleSubmit = async () => {
+        if (!form.name.trim()) {
+            toast.error("Please enter employee name");
+            return;
+        }
+        if (!form.branchId) {
+            toast.error("Please select a branch");
+            return;
+        }
+
+        setSubmitting(true);
+        try {
         const repaymentAmount = parseFloat(form.repaymentAmount) || 0;
         const dataToSend = {
             name: form.name,
@@ -150,9 +168,19 @@ export default function EmployeeManagement() {
 
         const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(dataToSend) });
         if (res.ok) {
-            fetchEmployees();
+                toast.success(editing ? "Employee updated successfully" : "Employee added successfully");
+                await fetchEmployees();
             resetForm();
             setOpen(false);
+            } else {
+                const errorData = await res.json().catch(() => ({}));
+                toast.error(errorData.message || (editing ? "Failed to update employee" : "Failed to add employee"));
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error("An error occurred. Please try again.");
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -197,8 +225,26 @@ export default function EmployeeManagement() {
     };
 
     const handleDelete = async (id: string) => {
+        if (!window.confirm("Are you sure you want to delete this employee?")) {
+            return;
+        }
+
+        setDeleting(id);
+        try {
         const res = await fetch(`/api/employees/${id}`, { method: "DELETE" });
-        if (res.ok) fetchEmployees();
+            if (res.ok) {
+                toast.success("Employee deleted successfully");
+                await fetchEmployees();
+            } else {
+                const errorData = await res.json().catch(() => ({}));
+                toast.error(errorData.message || "Failed to delete employee");
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error("An error occurred while deleting. Please try again.");
+        } finally {
+            setDeleting(null);
+        }
     };
 
     const calculateGross = (emp: Employee) => emp.basicPay + emp.productRebate + emp.pointsRebate + emp.performanceRebate;
@@ -468,6 +514,12 @@ export default function EmployeeManagement() {
 
     return (
         <Box sx={{ mt: 4, px: 2 }}>
+            <Backdrop
+                sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1 }}
+                open={loading}
+            >
+                <CircularProgress color="inherit" />
+            </Backdrop>
             <Card elevation={3} sx={{ mb: 4 }}>
                 <CardContent>
                     <Box display="flex" alignItems="center" justifyContent="space-between" mb={3}>
@@ -562,15 +614,21 @@ export default function EmployeeManagement() {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {filteredEmployees.length === 0 && (
+                                {loading && filteredEmployees.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={12} align="center">
+                                        <TableCell colSpan={13} align="center">
+                                            <CircularProgress size={24} sx={{ my: 2 }} />
+                                        </TableCell>
+                                    </TableRow>
+                                ) : filteredEmployees.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={13} align="center">
                                             <Typography color="text.secondary">
                                                 No employees found
                                             </Typography>
                                         </TableCell>
                                     </TableRow>
-                                )}
+                                ) : null}
                                 {filteredEmployees
                                     .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                                     .map((emp) => (
@@ -609,7 +667,7 @@ export default function EmployeeManagement() {
                                                 </Box>
                                             </TableCell>
                                             <TableCell sx={{ fontFamily: 'monospace' }}>
-                                                {new Date(emp?.createdAt || new Date()).toLocaleString('en-US', { month: 'long' })}
+                                                {new Date(emp?.createdAt || new Date()).toLocaleString('en-US', { month: 'long', year: 'numeric' })}
                                             </TableCell>
                                             <TableCell>
                                                 <IconButton
@@ -630,8 +688,13 @@ export default function EmployeeManagement() {
                                                     size="small"
                                                     onClick={() => handleDelete(emp._id)}
                                                     sx={{ color: 'error.main' }}
+                                                    disabled={deleting === emp._id}
                                                 >
+                                                    {deleting === emp._id ? (
+                                                        <CircularProgress size={16} />
+                                                    ) : (
                                                     <Delete fontSize="small" />
+                                                    )}
                                                 </IconButton>
                                             </TableCell>
                                         </TableRow>
@@ -841,7 +904,11 @@ export default function EmployeeManagement() {
                         onClick={handleSubmit}
                         variant="contained"
                         sx={{ borderRadius: 2, px: 3 }}
+                        disabled={submitting}
                     >
+                        {submitting ? (
+                            <CircularProgress size={20} sx={{ mr: 1 }} />
+                        ) : null}
                         {editing ? "Update Employee" : "Add Employee"}
                     </Button>
                 </DialogActions>
