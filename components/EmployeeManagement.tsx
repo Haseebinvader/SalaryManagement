@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { Box, Typography, TextField, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Select, MenuItem, FormControl, InputLabel, Card, CardContent, Chip, Avatar, TablePagination, CircularProgress, Backdrop } from "@mui/material";
-import { Delete, Edit, Add, Person, Business, AttachMoney, AccountBalance, Visibility, PictureAsPdf, Print } from "@mui/icons-material";
+import { Delete, Edit, Add, Person, Business, AttachMoney, AccountBalance, Visibility, PictureAsPdf, Print, FileDownload } from "@mui/icons-material";
 import { toast } from "react-toastify";
 import jsPDF from 'jspdf';
 import { autoTable } from 'jspdf-autotable';
@@ -71,43 +71,33 @@ export default function EmployeeManagement() {
     const [open, setOpen] = useState(false);
     const [viewOpen, setViewOpen] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-    const [selectedMonth, setSelectedMonth] = useState("all");
-
-    const generateMonthOptions = () => {
-        const options = [
-            { value: "all", label: "All Months" }
-        ];
-        const now = new Date();
-        for (let i = 0; i < 12; i++) {
-            const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-            const label = date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-            options.push({ value, label });
-        }
-        return options;
-    };
+    const [selectedDate, setSelectedDate] = useState<string>("");
     
     const filteredEmployees = employees.filter((emp) => {
         const matchName = emp.name.toLowerCase().includes(searchName.toLowerCase());
         const matchId = emp.employeeId?.toLowerCase().includes(searchId.toLowerCase()) ?? true;
         const matchBranch = emp.branchId?.name.toLowerCase().includes(branchName.toLowerCase()) ?? true;
 
-        let matchMonth = true;
-        if (selectedMonth !== "all" && emp.salaryMonth) {
-            // Convert salaryMonth (e.g., "December 2025") to format like "2025-12"
+        let matchDate = true;
+        if (selectedDate && emp.salaryMonth) {
             try {
-                const date = new Date(emp.salaryMonth + " 1");
-                if (!isNaN(date.getTime())) {
-                    const empMonthYear = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-                    matchMonth = empMonthYear === selectedMonth;
+                // Parse the selected date (format: YYYY-MM-DD)
+                const selected = new Date(selectedDate);
+                // Parse employee salaryMonth (e.g., "December 2025")
+                const empDate = new Date(emp.salaryMonth + " 1");
+                
+                if (!isNaN(selected.getTime()) && !isNaN(empDate.getTime())) {
+                    // Compare year and month
+                    matchDate = selected.getFullYear() === empDate.getFullYear() &&
+                               selected.getMonth() === empDate.getMonth();
                 }
             } catch (e) {
-                // If parsing fails, check if it matches the selectedMonth format directly
-                matchMonth = emp.salaryMonth.toLowerCase().includes(selectedMonth.toLowerCase());
+                // If parsing fails, don't match
+                matchDate = false;
             }
         }
 
-        return matchName && matchId && matchBranch && matchMonth;
+        return matchName && matchId && matchBranch && matchDate;
     });
 
     useEffect(() => {
@@ -157,8 +147,18 @@ export default function EmployeeManagement() {
             toast.error("Please enter employee ID");
             return;
         }
+        // Validate Employee ID contains only numbers
+        if (!/^[0-9]+$/.test(form.employeeId.trim())) {
+            toast.error("Employee ID must contain only numbers");
+            return;
+        }
         if (!form.name.trim()) {
             toast.error("Please enter employee name");
+            return;
+        }
+        // Validate Employee Name contains only letters, spaces, hyphens, and apostrophes
+        if (!/^[a-zA-Z\s'-]+$/.test(form.name.trim())) {
+            toast.error("Employee name must contain only letters, spaces, hyphens, and apostrophes");
             return;
         }
         if (!form.branchId) {
@@ -363,6 +363,19 @@ export default function EmployeeManagement() {
     const calculateGross = (emp: Employee) => emp.basicPay + emp.productRebate + emp.pointsRebate + emp.performanceRebate;
     const calculateNet = (emp: Employee) => calculateGross(emp) - emp.houseRentDeduction - emp.foodDeduction - emp.loanDeduction;
 
+    // Validation helper functions
+    const handleEmployeeIdChange = (value: string) => {
+        // Only allow numbers
+        const numericValue = value.replace(/[^0-9]/g, '');
+        setForm({ ...form, employeeId: numericValue });
+    };
+
+    const handleEmployeeNameChange = (value: string) => {
+        // Only allow letters, spaces, and common name characters (hyphens, apostrophes)
+        const nameValue = value.replace(/[^a-zA-Z\s'-]/g, '');
+        setForm({ ...form, name: nameValue });
+    };
+
     const handlePrint = (employee: Employee | null) => {
         if (!employee || typeof window === "undefined") return;
 
@@ -436,6 +449,140 @@ export default function EmployeeManagement() {
         printWindow.document.close();
         printWindow.focus();
         printWindow.print();
+    };
+
+    const handleGenerateMonthlyPDF = () => {
+        if (filteredEmployees.length === 0) {
+            toast.error("No employees found to generate PDF");
+            return;
+        }
+
+        const doc = new jsPDF("p", "mm", "a4");
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const margin = 15;
+        let yPosition = 20;
+
+        // Logo
+        try {
+            doc.addImage(logoUrl, "JPEG", margin, yPosition, 40, 40);
+        } catch (e) {
+            console.warn("Logo not loaded");
+        }
+
+        // Company Name
+        doc.setFontSize(24);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(158, 158, 158);
+        doc.text("Secure Vision", margin + 50, yPosition + 14);
+
+        // Get the selected date or use current date
+        let reportTitle = "Monthly Salary Report";
+        if (selectedDate) {
+            const date = new Date(selectedDate);
+            const monthYear = date.toLocaleString("en-US", { month: "long", year: "numeric" });
+            reportTitle = `Salary Report for ${monthYear}`;
+        }
+
+        doc.setFontSize(18);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(90);
+        doc.text(reportTitle, margin + 50, yPosition + 33);
+
+        yPosition += 50;
+
+        // Prepare table data
+        const tableData = filteredEmployees.map((emp) => [
+            emp.employeeId || "N/A",
+            emp.name,
+            emp.basicPay.toFixed(2),
+            calculateGross(emp).toFixed(2),
+        ]);
+
+        // Calculate totals
+        const totalBasicPay = filteredEmployees.reduce((sum, emp) => sum + emp.basicPay, 0);
+        const totalGrossPay = filteredEmployees.reduce((sum, emp) => sum + calculateGross(emp), 0);
+
+        // Add totals row
+        tableData.push([
+            "",
+            "TOTAL",
+            totalBasicPay.toFixed(2),
+            totalGrossPay.toFixed(2),
+        ]);
+
+        // Generate table
+        autoTable(doc, {
+            startY: yPosition,
+            head: [["Employee ID", "Employee Name", "Basic Pay", "Gross Pay"]],
+            body: tableData,
+            theme: "grid",
+            headStyles: {
+                fillColor: [158, 158, 158],
+                textColor: 255,
+                fontStyle: "bold",
+                halign: "center",
+            },
+            styles: {
+                fontSize: 10,
+                cellPadding: 4,
+                halign: "center",
+            },
+            columnStyles: {
+                0: { halign: "center", cellWidth: 40 },
+                1: { halign: "left", cellWidth: 60 },
+                2: { halign: "right", cellWidth: 35 },
+                3: { halign: "right", cellWidth: 35 },
+            },
+            margin: { left: margin, right: margin },
+            didParseCell: (data: any) => {
+                // Style the totals row
+                if (data.row.index === tableData.length - 1) {
+                    data.cell.styles.fillColor = [232, 245, 233];
+                    data.cell.styles.fontStyle = "bold";
+                    data.cell.styles.fontSize = 11;
+                }
+            },
+        });
+
+        yPosition = (doc as any).lastAutoTable.finalY + 20;
+
+        // Summary section
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(0);
+        doc.text("Summary", margin, yPosition);
+        yPosition += 10;
+
+        doc.setFillColor(240, 240, 240);
+        doc.rect(margin, yPosition, pageWidth - 2 * margin, 20, "F");
+
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Basic Pay:", margin + 5, yPosition + 8);
+        doc.setFont("helvetica", "normal");
+        doc.text(totalBasicPay.toFixed(2), pageWidth - margin - 50, yPosition + 8, { align: "right" });
+
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Gross Pay:", margin + 5, yPosition + 16);
+        doc.setFont("helvetica", "normal");
+        doc.text(totalGrossPay.toFixed(2), pageWidth - margin - 50, yPosition + 16, { align: "right" });
+
+        yPosition += 30;
+
+        // Footer
+        const pageHeight = doc.internal.pageSize.getHeight();
+        doc.setFontSize(9);
+        doc.setTextColor(100);
+        doc.text(`Total Employees: ${filteredEmployees.length}`, margin, pageHeight - 20);
+        const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+        doc.text(`Generated on: ${today}`, pageWidth - margin, pageHeight - 20, { align: "right" });
+        doc.text("This is a system-generated document.", margin, pageHeight - 10);
+
+        // Save PDF
+        const dateStr = selectedDate ? new Date(selectedDate).toISOString().slice(0, 7) : new Date().toISOString().slice(0, 7);
+        const fileName = `Monthly_Salary_Report_${dateStr}.pdf`;
+        doc.save(fileName);
+        toast.success("PDF generated successfully");
     };
 
     const handleDownloadPDF = (employee: Employee | null) => {
@@ -674,22 +821,31 @@ export default function EmployeeManagement() {
                                 onChange={(e) => setBranchName(e.target.value)}
                                 sx={{ minWidth: 220 }}
                             />
-                            <FormControl size="small" sx={{ minWidth: 220 }}>
-                                <InputLabel>Filter by Month</InputLabel>
-                                <Select
-                                    value={selectedMonth}
-                                    label="Filter by Month"
-                                    onChange={(e) => setSelectedMonth(e.target.value as string)}
+                            <TextField
+                                size="small"
+                                label="Filter by Date"
+                                type="date"
+                                value={selectedDate}
+                                onChange={(e) => setSelectedDate(e.target.value)}
+                                InputLabelProps={{
+                                    shrink: true,
+                                }}
+                                sx={{ minWidth: 220 }}
+                            />
+                            {selectedDate && filteredEmployees.length > 0 && (
+                                <Button
+                                    variant="contained"
+                                    size="small"
+                                    startIcon={<FileDownload />}
+                                    onClick={handleGenerateMonthlyPDF}
+                                    sx={{ minWidth: 200 }}
+                                    color="success"
                                 >
-                                    {generateMonthOptions().map((option) => (
-                                        <MenuItem key={option.value} value={option.value}>
-                                            {option.label}
-                                        </MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
+                                    Generate Monthly PDF
+                                </Button>
+                            )}
 
-                            {(searchName || searchId || branchName || selectedMonth !== "all") && (
+                            {(searchName || searchId || branchName || selectedDate) && (
                                 <Button
                                     variant="outlined"
                                     size="small"
@@ -697,7 +853,7 @@ export default function EmployeeManagement() {
                                         setSearchName("");
                                         setSearchId("");
                                         setBranchName("");
-                                        setSelectedMonth("all");
+                                        setSelectedDate("");
                                     }}
                                 >
                                     Clear Filters
@@ -869,19 +1025,23 @@ export default function EmployeeManagement() {
                                 size="small"
                                 label="Employee ID"
                                 value={form.employeeId}
-                                onChange={(e) => setForm({ ...form, employeeId: e.target.value })}
+                                onChange={(e) => handleEmployeeIdChange(e.target.value)}
                                 fullWidth
                                 variant="outlined"
                                 required
+                                helperText="Only numbers are allowed"
+                                error={form.employeeId.length > 0 && !/^[0-9]+$/.test(form.employeeId)}
                             />
                             <TextField
                                 size="small"
                                 label="Employee Name"
                                 value={form.name}
-                                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                onChange={(e) => handleEmployeeNameChange(e.target.value)}
                                 fullWidth
                                 variant="outlined"
                                 required
+                                helperText="Only letters, spaces, hyphens, and apostrophes are allowed"
+                                error={form.name.length > 0 && !/^[a-zA-Z\s'-]+$/.test(form.name)}
                             />
                         </Box>
                         <Box display="flex" gap={2}>
